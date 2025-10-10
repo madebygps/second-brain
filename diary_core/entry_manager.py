@@ -102,11 +102,9 @@ class EntryManager:
     def create_entry_template(
         self,
         entry_date: date,
-        prompts: List[str],
-        temporal_links: Optional[List[str]] = None,
-        tags: Optional[List[str]] = None
+        prompts: List[str]
     ) -> DiaryEntry:
-        """Create a new entry with template structure."""
+        """Create a new entry with template structure (prompts + brain dump only)."""
         sections = []
 
         # Reflection Prompts section
@@ -120,17 +118,6 @@ class EntryManager:
         # Brain Dump section
         sections.append("## Brain Dump")
         sections.append("")
-        sections.append("---")
-        sections.append("")
-
-        # Memory Links section
-        sections.append("## Memory Links")
-        if temporal_links:
-            links_str = " • ".join([f"[[{link}]]" for link in temporal_links])
-            sections.append(f"**Temporal:** {links_str}")
-        if tags:
-            tags_str = " ".join([f"#{tag}" for tag in tags])
-            sections.append(f"**Topics:** {tags_str}")
 
         content = "\n".join(sections)
         return DiaryEntry(entry_date, content)

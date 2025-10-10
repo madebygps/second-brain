@@ -66,6 +66,8 @@ Optional:
 
 ## Entry Format
 
+Created entries have two sections:
+
 ```markdown
 ## Reflection Prompts
 **1. Based on [[2025-01-14]], how did X work out?**
@@ -74,7 +76,11 @@ Optional:
 
 ## Brain Dump
 Your writing here...
+```
 
+After writing, run `diary link today` to add semantic backlinks:
+
+```markdown
 ---
 
 ## Memory Links

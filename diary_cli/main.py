@@ -71,16 +71,8 @@ def create(
 
             prompts = generate_prompts_for_date(entry_date, entry_manager, ollama_client)
 
-        # Get temporal links (past 3 days)
-        past_dates = entry_manager.get_past_calendar_days(entry_date, 3)
-        temporal_links = [d.isoformat() for d in past_dates if entry_manager.entry_exists(d)]
-
-        # Create entry
-        entry = entry_manager.create_entry_template(
-            entry_date,
-            prompts,
-            temporal_links=temporal_links[:2] if temporal_links else None  # Limit to 2 most recent
-        )
+        # Create entry (no memory links yet - those are added with 'diary link')
+        entry = entry_manager.create_entry_template(entry_date, prompts)
 
         entry_manager.write_entry(entry)
 
