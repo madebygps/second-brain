@@ -103,25 +103,36 @@ def generate_semantic_tags(
 
     context = "\n\n".join(context_parts)
 
-    system_prompt = f"""You are analyzing diary entries to extract key themes and topics. Generate {max_tags} concise topic tags (single words or short phrases, 3-15 characters each).
+    system_prompt = f"""You are analyzing diary entries to extract deep thematic tags. Generate {max_tags} tags that capture the underlying themes, emotions, and psychological patterns - not just surface-level topics.
 
-Tags should:
-- Capture the main themes, emotions, or topics
-- Be specific and meaningful (not generic)
-- Use lowercase
-- Be single words or very short phrases (no spaces preferred, use hyphens if needed)
-- Avoid emojis
+Good tags identify:
+- Emotional states and patterns (e.g., #overwhelm, #fulfillment, #frustration)
+- Personal struggles or growth areas (e.g., #boundaries, #patience, #balance)
+- Recurring life themes (e.g., #identity, #purpose, #relationships)
+- Internal conflicts or tensions (e.g., #perfectionism, #control)
 
-Return ONLY the tags, one per line, with a # prefix (e.g., #focus, #work, #anxiety).
+Avoid:
+- Generic activity words (e.g., #work, #meeting)
+- Obvious nouns from the text (e.g., #python, #book)
+- Surface-level descriptions (e.g., #busy, #progress)
+
+Tags should be:
+- Thematic and emotionally meaningful
+- 3-15 characters, lowercase
+- Single words or hyphenated phrases
+- No emojis
+
+Return ONLY the tags, one per line, with a # prefix (e.g., #fulfillment, #self-doubt, #growth).
 Do not include explanations or additional text."""
 
-    user_prompt = f"""Based on these diary entries, generate {max_tags} topic tags:
+    user_prompt = f"""Analyze these diary entries and identify the deep themes, emotional patterns, and underlying concerns:
 
 {context}
 
 ---
 
-Generate {max_tags} tags (one per line, with # prefix)."""
+What are the {max_tags} most meaningful thematic tags that capture the emotional and psychological essence of these entries?
+Return only the tags (one per line, with # prefix), focusing on themes over topics."""
 
     try:
         response = ollama_client.generate_sync(
