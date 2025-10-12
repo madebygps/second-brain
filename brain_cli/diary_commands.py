@@ -1,4 +1,4 @@
-"""CLI for diary management."""
+"""Diary management commands."""
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -7,21 +7,22 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
-from diary_core.config import get_config, get_llm_client
-from diary_core.entry_manager import EntryManager, DiaryEntry
-from diary_core.template_generator import generate_prompts_for_date
-from diary_core.analysis import (
+from brain_core.config import get_config, get_llm_client
+from brain_core.entry_manager import EntryManager, DiaryEntry
+from brain_core.template_generator import generate_prompts_for_date
+from brain_core.analysis import (
     find_related_entries,
     generate_topic_tags,
     extract_todos,
     extract_themes,
     create_memory_trace_report
 )
-from diary_core.llm_analysis import (
+from brain_core.llm_analysis import (
     generate_semantic_backlinks,
+    generate_semantic_backlinks_enhanced,
     generate_semantic_tags
 )
-from diary_core.constants import (
+from brain_core.constants import (
     PAST_ENTRIES_LOOKBACK_DAYS,
     MIN_SUBSTANTIAL_CONTENT_CHARS
 )
@@ -121,13 +122,13 @@ def link(
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
-            progress.add_task(description="Finding related entries with LLM...", total=None)
+            progress.add_task(description="Finding related entries with enhanced LLM analysis...", total=None)
 
             # Get past entries for context
             past_entries = entry_manager.list_entries(days=PAST_ENTRIES_LOOKBACK_DAYS)
 
-            # Use LLM to find semantic backlinks
-            semantic_links = generate_semantic_backlinks(
+            # Use enhanced LLM to find semantic backlinks with confidence scores
+            semantic_links_enhanced = generate_semantic_backlinks_enhanced(
                 entry,
                 past_entries,
                 llm_client,
@@ -142,17 +143,27 @@ def link(
         past_dates = entry_manager.get_past_calendar_days(entry_date, 3)
         temporal_links = [d.isoformat() for d in past_dates if entry_manager.entry_exists(d)]
 
-        # Add semantic links
-        for link in semantic_links:
-            if link not in temporal_links:
-                temporal_links.append(link)
+        # Build link metadata dict for enhanced display
+        link_metadata = {}
 
-        # Update entry
-        updated_entry = entry_manager.update_memory_links(entry, temporal_links, tags)
+        # Add semantic links with metadata
+        for link in semantic_links_enhanced:
+            if link.target_date not in temporal_links:
+                temporal_links.append(link.target_date)
+            link_metadata[link.target_date] = {
+                "confidence": link.confidence,
+                "reason": link.reason
+            }
+
+        # Update entry with metadata
+        updated_entry = entry_manager.update_memory_links(
+            entry, temporal_links, tags, link_metadata
+        )
         entry_manager.write_entry(updated_entry)
 
         console.print(f"[green]✓[/green] Updated links for: [bold]{entry.filename}[/bold]")
         console.print(f"[dim]  Temporal links: {len(temporal_links)}[/dim]")
+        console.print(f"[dim]  Semantic links: {len(semantic_links_enhanced)} (high: {sum(1 for l in semantic_links_enhanced if l.confidence == 'high')})[/dim]")
         console.print(f"[dim]  Topic tags: {len(tags)}[/dim]")
 
     except Exception as e:
@@ -369,8 +380,8 @@ def refresh(
             past_entries = entry_manager.list_entries(days=PAST_ENTRIES_LOOKBACK_DAYS)
 
             for entry in entries_to_refresh:
-                # Use LLM to find semantic backlinks
-                semantic_links = generate_semantic_backlinks(
+                # Use enhanced LLM to find semantic backlinks
+                semantic_links_enhanced = generate_semantic_backlinks_enhanced(
                     entry,
                     past_entries,
                     llm_client,
@@ -384,13 +395,20 @@ def refresh(
                 past_dates = entry_manager.get_past_calendar_days(entry.date, 3)
                 temporal_links = [d.isoformat() for d in past_dates if entry_manager.entry_exists(d)]
 
-                # Add semantic links
-                for link in semantic_links:
-                    if link not in temporal_links:
-                        temporal_links.append(link)
+                # Build link metadata
+                link_metadata = {}
+                for link in semantic_links_enhanced:
+                    if link.target_date not in temporal_links:
+                        temporal_links.append(link.target_date)
+                    link_metadata[link.target_date] = {
+                        "confidence": link.confidence,
+                        "reason": link.reason
+                    }
 
-                # Update entry
-                updated_entry = entry_manager.update_memory_links(entry, temporal_links, tags)
+                # Update entry with metadata
+                updated_entry = entry_manager.update_memory_links(
+                    entry, temporal_links, tags, link_metadata
+                )
                 entry_manager.write_entry(updated_entry)
                 updated_count += 1
 

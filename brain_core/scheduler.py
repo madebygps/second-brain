@@ -6,11 +6,11 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 import signal
 
-from diary_core.config import get_config, get_llm_client
-from diary_core.entry_manager import EntryManager
-from diary_core.analysis import create_memory_trace_report
-from diary_core.llm_analysis import generate_semantic_backlinks, generate_semantic_tags
-from diary_core.constants import (
+from brain_core.config import get_config, get_llm_client
+from brain_core.entry_manager import EntryManager
+from brain_core.analysis import create_memory_trace_report
+from brain_core.llm_analysis import generate_semantic_backlinks, generate_semantic_tags
+from brain_core.constants import (
     PAST_ENTRIES_LOOKBACK_DAYS,
     MIN_SUBSTANTIAL_CONTENT_CHARS
 )

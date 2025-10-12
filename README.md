@@ -1,15 +1,23 @@
 # Second Brain
 
-AI-powered journaling with smart prompts, semantic backlinks, and background automation.
+AI-powered second brain with intelligent journaling, book notes search, and background automation.
 
 ## Features
 
+**Diary:**
 - AI-generated reflection prompts with topic diversity
 - Semantic backlinks using LLM analysis (not keyword matching)
 - Automatic topic tag generation
 - Background daemon for daily linking and weekly analysis
 - Obsidian-compatible markdown format
-- **Flexible LLM**: Local (Ollama) or cloud (Azure OpenAI)
+
+**Notes Search:**
+- Search book notes via Azure AI Search
+- Semantic and text search modes
+- Rich formatted results
+
+**LLM Support:**
+- Local (Ollama) or cloud (Azure OpenAI)
 
 ## Quick Start
 
@@ -19,55 +27,55 @@ uv sync
 
 # Configure
 cp .env.example .env
-# Edit .env with paths and LLM provider
+# Edit .env with your paths and credentials
 
-# Option A: Local (Ollama)
-ollama pull llama3.1:latest
+# Create your first diary entry
+uv run brain diary create today
 
-# Option B: Cloud (Azure OpenAI)
-# Set AZURE_OPENAI_* vars in .env
-
-# Create your first entry
-uv run diary create today
+# Search your book notes (requires Azure AI Search)
+uv run brain notes search "discipline"
 ```
 
 ## Usage
 
 ```bash
-# Entry management
-uv run diary create today       # Create entry with AI prompts
-uv run diary link today         # Generate semantic backlinks
-uv run diary refresh 30         # Bulk refresh past 30 days
+# Diary management
+uv run brain diary create today       # Create entry with AI prompts
+uv run brain diary link today         # Generate semantic backlinks
+uv run brain diary refresh 30         # Bulk refresh past 30 days
+uv run brain diary list 7             # List recent entries
 
 # Analysis
-uv run diary analyze 30         # Memory trace report
-uv run diary themes 7           # Show recurring themes
-uv run diary todos today        # Extract action items
+uv run brain diary analyze 30         # Memory trace report
+uv run brain diary themes 7           # Show recurring themes
+uv run brain diary todos today        # Extract action items
 
-# Browsing
-uv run diary list 7             # List recent entries
+# Notes search
+uv run brain notes search "topic"     # Search book notes
+uv run brain notes search "topic" --semantic --detailed
+uv run brain notes status             # Check connection
 
 # Background automation
-uv run diary-daemon start       # Auto-link at 11pm daily
-uv run diary-daemon status      # Check daemon status
+uv run brain daemon start             # Auto-link at 11pm daily
+uv run brain daemon status            # Check daemon status
 ```
 
 ## Configuration
 
 **Required:**
-- `DIARY_PATH` - Your Obsidian vault path
+- `DIARY_PATH` - Obsidian vault path
 - `PLANNER_PATH` - Path for extracted todos
 
-**Optional:**
-- `LLM_PROVIDER` - `ollama` (default) or `azure`
+**LLM Provider** (choose one):
+- `LLM_PROVIDER=ollama` → `OLLAMA_MODEL`, `OLLAMA_URL`
+- `LLM_PROVIDER=azure` → `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`
 
-**LLM Options:**
-- Ollama: `OLLAMA_MODEL`, `OLLAMA_URL`
-- Azure: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`
+**Notes Search** (optional):
+- `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_API_KEY`, `AZURE_SEARCH_INDEX_NAME`
 
-**Daemon:**
-- `DAEMON_AUTO_LINK_TIME` - Default: 23:00
-- `DAEMON_WEEKLY_ANALYSIS` - Default: true
+**Daemon** (optional):
+- `DAEMON_AUTO_LINK_TIME` (default: 23:00)
+- `DAEMON_WEEKLY_ANALYSIS` (default: true)
 
 ## Entry Format
 
@@ -83,7 +91,7 @@ Created entries have two sections:
 Your writing here...
 ```
 
-After writing, run `diary link today` to add semantic backlinks:
+After writing, run `brain diary link today` to add semantic backlinks:
 
 ```markdown
 ---
@@ -97,7 +105,8 @@ After writing, run `diary link today` to add semantic backlinks:
 
 - Python 3.13+
 - uv package manager
-- **Either**: Ollama with llama3.1:latest (local) **or** Azure OpenAI account (cloud)
+- LLM: Ollama (local) or Azure OpenAI (cloud)
+- Optional: Azure AI Search (for notes search)
 
 ## License
 

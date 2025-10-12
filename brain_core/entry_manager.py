@@ -166,17 +166,48 @@ class EntryManager:
         self,
         entry: DiaryEntry,
         temporal_links: List[str],
-        topic_tags: List[str]
+        topic_tags: List[str],
+        link_metadata: dict = None
     ) -> DiaryEntry:
-        """Update the Memory Links section of an entry."""
+        """Update the Memory Links section of an entry.
+
+        Args:
+            link_metadata: Optional dict mapping date -> {"confidence": str, "reason": str}
+                          for displaying link explanations
+        """
         # Parse existing content
         entry.parse_sections()
 
         # Build new Memory Links section
         memory_lines = ["## Memory Links"]
+
         if temporal_links:
-            links_str = " • ".join([f"[[{link}]]" for link in temporal_links])
-            memory_lines.append(f"**Temporal:** {links_str}")
+            if link_metadata:
+                # Enhanced format with confidence and reasons
+                memory_lines.append("**Temporal:**")
+                for link in temporal_links:
+                    meta = link_metadata.get(link, {})
+                    confidence = meta.get("confidence", "")
+                    reason = meta.get("reason", "")
+
+                    # Format: [[date]] (confidence) - reason
+                    link_str = f"- [[{link}]]"
+                    if confidence:
+                        confidence_emoji = {
+                            "high": "🔗",
+                            "medium": "→",
+                            "low": "~"
+                        }.get(confidence, "→")
+                        link_str += f" {confidence_emoji}"
+                    if reason:
+                        link_str += f" *{reason}*"
+
+                    memory_lines.append(link_str)
+            else:
+                # Legacy simple format
+                links_str = " • ".join([f"[[{link}]]" for link in temporal_links])
+                memory_lines.append(f"**Temporal:** {links_str}")
+
         if topic_tags:
             tags_str = " ".join([f"#{tag}" for tag in topic_tags])
             memory_lines.append(f"**Topics:** {tags_str}")

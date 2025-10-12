@@ -1,4 +1,4 @@
-"""Daemon management CLI."""
+"""Daemon management commands."""
 import typer
 import subprocess
 import signal
@@ -29,7 +29,8 @@ def start():
             PIDFILE.unlink()
 
     # Start daemon in background
-    daemon_script = Path(__file__).parent / "scheduler.py"
+    # Look for scheduler in the brain_core directory
+    daemon_script = Path(__file__).parent.parent / "brain_core" / "scheduler.py"
 
     # Run daemon as background process
     process = subprocess.Popen(
@@ -43,7 +44,7 @@ def start():
     PIDFILE.write_text(str(process.pid))
 
     console.print(f"[green]✓[/green] Daemon started (PID: {process.pid})")
-    console.print("[dim]Use 'diary-daemon stop' to stop it[/dim]")
+    console.print("[dim]Use 'brain daemon stop' to stop it[/dim]")
 
 
 @app.command()

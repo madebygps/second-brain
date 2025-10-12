@@ -8,66 +8,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Python Version**: 3.13+
 - **Package Management**: `uv` (ALWAYS use `uv` commands, never `pip` or other package managers)
-- **Dependencies**: httpx, python-dotenv, typer, rich, apscheduler
+- **Dependencies**: httpx, python-dotenv, typer, rich, apscheduler, azure-search-documents, openai
 
 ## Architecture
 
-The project is organized into three main modules:
+The project is organized into two main modules:
 
-### diary_core/ - Business Logic
-- `config.py` - Load .env configuration and validate paths (diary_core/config.py:11)
-- `entry_manager.py` - Read/write markdown diary entries (diary_core/entry_manager.py:9)
-- `ollama_client.py` - Local LLM via HTTP API (diary_core/ollama_client.py:7)
-- `analysis.py` - Extract themes, statistical analysis (diary_core/analysis.py:7)
-- `llm_analysis.py` - LLM-powered semantic backlinks and topic tags (diary_core/llm_analysis.py:7)
-- `template_generator.py` - Generate AI prompts from recent entries (diary_core/template_generator.py:5)
+### brain_core/ - Business Logic
+- `config.py` - Load .env configuration and validate paths (brain_core/config.py:11)
+- `entry_manager.py` - Read/write markdown diary entries (brain_core/entry_manager.py:9)
+- `ollama_client.py` - Local LLM via HTTP API (brain_core/ollama_client.py:7)
+- `azure_client.py` - Azure OpenAI client (brain_core/azure_client.py:7)
+- `azure_search_client.py` - Azure AI Search client for book notes (brain_core/azure_search_client.py:20)
+- `llm_client.py` - Abstract LLM client interface (brain_core/llm_client.py:7)
+- `analysis.py` - Extract themes, statistical analysis (brain_core/analysis.py:7)
+- `llm_analysis.py` - LLM-powered semantic backlinks and topic tags (brain_core/llm_analysis.py:7)
+- `template_generator.py` - Generate AI prompts from recent entries (brain_core/template_generator.py:5)
+- `scheduler.py` - APScheduler for background automation (brain_core/scheduler.py:6)
+- `constants.py` - Shared constants (brain_core/constants.py:1)
 
-### diary_cli/ - Manual Commands
-- `main.py` - CLI interface using Typer (diary_cli/main.py:13)
-
-### diary_daemon/ - Background Automation
-- `scheduler.py` - APScheduler for automated tasks (diary_daemon/scheduler.py:6)
-- `main.py` - Daemon management CLI (diary_daemon/main.py:6)
+### brain_cli/ - CLI Interface
+- `main.py` - Root CLI entry point with subcommands (brain_cli/main.py:7)
+- `diary_commands.py` - Diary management commands (brain_cli/diary_commands.py:26)
+- `daemon_commands.py` - Daemon management commands (brain_cli/daemon_commands.py:10)
+- `notes_commands.py` - Book notes search via Azure AI Search (brain_cli/notes_commands.py:11)
 
 ## Common Commands
 
-### Diary CLI Commands
 ```bash
-# Create new entry with AI-generated prompts
-uv run diary create today
-uv run diary create yesterday
-uv run diary create 2025-01-15
+# Diary commands
+uv run brain diary create today
+uv run brain diary create yesterday
+uv run brain diary create 2025-01-15
+uv run brain diary link today
+uv run brain diary refresh 30
+uv run brain diary analyze 30
+uv run brain diary todos today
+uv run brain diary todos today --save
+uv run brain diary list 7
+uv run brain diary themes 7
 
-# Generate backlinks and tags for entry
-uv run diary link today
+# Daemon commands
+uv run brain daemon start
+uv run brain daemon stop
+uv run brain daemon status
 
-# Bulk refresh backlinks for all entries
-uv run diary refresh 30
+# Notes commands (Azure AI Search)
+uv run brain notes search "notes on discipline"
+uv run brain notes search "productivity tips" --top 5
+uv run brain notes search "deep work" --semantic
+uv run brain notes search "learning strategies" --detailed
+uv run brain notes status
 
-# Generate memory trace analysis
-uv run diary analyze 30
-
-# Extract action items/todos
-uv run diary todos today
-uv run diary todos today --save  # Save to planner
-
-# List recent entries
-uv run diary list 7
-
-# Show recurring themes
-uv run diary themes 7
-```
-
-### Daemon Commands
-```bash
-# Start background daemon
-uv run diary-daemon start
-
-# Stop daemon
-uv run diary-daemon stop
-
-# Check daemon status
-uv run diary-daemon status
+# Future commands (coming soon):
+# uv run brain planner add "task"
 ```
 
 ### Development Commands
@@ -90,9 +84,25 @@ Copy `.env.example` to `.env` and configure:
 - `DIARY_PATH` - Path to Obsidian vault (or markdown directory)
 - `PLANNER_PATH` - Path for extracted todo files
 
-**Optional:**
+**LLM Provider (choose one):**
+- `LLM_PROVIDER` - "ollama" or "azure" (default: ollama)
+
+**Ollama Configuration (when LLM_PROVIDER=ollama):**
 - `OLLAMA_MODEL` - Default: llama3.1:latest
 - `OLLAMA_URL` - Default: http://localhost:11434
+
+**Azure OpenAI Configuration (when LLM_PROVIDER=azure):**
+- `AZURE_OPENAI_API_KEY` - Your Azure OpenAI API key
+- `AZURE_OPENAI_ENDPOINT` - Your Azure OpenAI endpoint
+- `AZURE_OPENAI_DEPLOYMENT` - Deployment name (e.g., gpt-4o)
+- `AZURE_OPENAI_API_VERSION` - Default: 2024-02-15-preview
+
+**Azure AI Search Configuration (for book notes):**
+- `AZURE_SEARCH_ENDPOINT` - Azure Search service endpoint
+- `AZURE_SEARCH_API_KEY` - Azure Search API key
+- `AZURE_SEARCH_INDEX_NAME` - Index name (default: notes-index)
+
+**Daemon Configuration:**
 - `DAEMON_AUTO_LINK_TIME` - Default: 23:00
 - `DAEMON_WEEKLY_ANALYSIS` - Default: true
 - `DAEMON_REFRESH_DAYS` - Default: 30
