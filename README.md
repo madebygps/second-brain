@@ -108,6 +108,21 @@ After writing, run `brain diary link today` to add semantic backlinks:
 - LLM: Ollama (local) or Azure OpenAI (cloud)
 - Optional: Azure AI Search (for notes search)
 
+## Testing
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run with coverage
+uv run pytest --cov
+
+# Run specific test file
+uv run pytest tests/brain_core/test_azure_search_client.py
+```
+
+**Current coverage:** 23% (18 passing tests)
+
 ## License
 
 MIT
