@@ -4,6 +4,16 @@ from typing import List
 import re
 from .entry_manager import DiaryEntry, EntryManager
 from .ollama_client import OllamaClient
+from .constants import (
+    DAILY_PROMPT_COUNT,
+    WEEKLY_PROMPT_COUNT,
+    PROMPT_CONTEXT_DAYS,
+    WEEKLY_CONTEXT_DAYS,
+    PROMPT_TEMPERATURE,
+    PROMPT_MAX_TOKENS,
+    WEEKLY_PROMPT_MAX_TOKENS,
+    ENTRY_PREVIEW_LENGTH
+)
 
 
 def remove_emojis(text: str) -> str:
@@ -42,9 +52,9 @@ def generate_daily_prompts(
 
     # Build context from recent entries
     context_parts = []
-    for entry in recent_entries[:3]:  # Use up to 3 recent entries
+    for entry in recent_entries[:PROMPT_CONTEXT_DAYS]:
         date_str = entry.date.isoformat()
-        preview = entry.brain_dump[:200] if len(entry.brain_dump) > 200 else entry.brain_dump
+        preview = entry.brain_dump[:ENTRY_PREVIEW_LENGTH] if len(entry.brain_dump) > ENTRY_PREVIEW_LENGTH else entry.brain_dump
         if preview:
             context_parts.append(f"[[{date_str}]]: {preview}")
 
@@ -52,12 +62,14 @@ def generate_daily_prompts(
 
     system_prompt = """You are a thoughtful journaling assistant. Generate 3 reflective questions
 based on the user's recent diary entries. Questions should:
-- Reference specific entries using [[YYYY-MM-DD]] format
-- Build on themes, questions, or situations mentioned
+- MUST reference at least one specific entry using [[YYYY-MM-DD]] format in each question
+- Build on themes, questions, or situations mentioned in the referenced entries
 - Encourage deeper reflection
 - Be personal and specific (not generic)
 - Do NOT use emojis in your questions
 - Use plain text only
+
+IMPORTANT: Each question MUST include at least one [[YYYY-MM-DD]] backlink to show where the prompt came from.
 
 Format each question on a new line, numbered 1-3. Be concise."""
 
@@ -65,14 +77,14 @@ Format each question on a new line, numbered 1-3. Be concise."""
 
 {context}
 
-Generate 3 numbered prompts that reference these entries and encourage reflection."""
+Generate 3 numbered prompts. Each prompt MUST include at least one [[YYYY-MM-DD]] backlink to reference where the prompt came from."""
 
     try:
         response = ollama_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
-            temperature=0.8,
-            max_tokens=300
+            temperature=PROMPT_TEMPERATURE,
+            max_tokens=PROMPT_MAX_TOKENS
         )
 
         # Parse prompts from response
@@ -88,12 +100,12 @@ Generate 3 numbered prompts that reference these entries and encourage reflectio
                 if cleaned:
                     prompts.append(cleaned)
 
-        # Ensure we have exactly 3 prompts
-        if len(prompts) >= 3:
-            return prompts[:3]
+        # Ensure we have exactly the right number of prompts
+        if len(prompts) >= DAILY_PROMPT_COUNT:
+            return prompts[:DAILY_PROMPT_COUNT]
         elif prompts:
-            # If we got some but not 3, pad with generic ones
-            while len(prompts) < 3:
+            # If we got some but not enough, pad with generic ones
+            while len(prompts) < DAILY_PROMPT_COUNT:
                 prompts.append("What else is on your mind?")
             return prompts
         else:
@@ -104,7 +116,7 @@ Generate 3 numbered prompts that reference these entries and encourage reflectio
                 "How are you feeling about things?"
             ]
 
-    except Exception as e:
+    except RuntimeError as e:
         # Fall back to generic prompts if LLM fails
         print(f"Warning: Failed to generate prompts via LLM: {e}")
         return [
@@ -130,9 +142,9 @@ def generate_weekly_prompts(
 
     # Build context from weekly entries
     context_parts = []
-    for entry in recent_entries[:7]:  # Use up to 7 days
+    for entry in recent_entries[:WEEKLY_CONTEXT_DAYS]:
         date_str = entry.date.isoformat()
-        preview = entry.brain_dump[:150] if len(entry.brain_dump) > 150 else entry.brain_dump
+        preview = entry.brain_dump[:ENTRY_PREVIEW_LENGTH] if len(entry.brain_dump) > ENTRY_PREVIEW_LENGTH else entry.brain_dump
         if preview:
             context_parts.append(f"[[{date_str}]]: {preview}")
 
@@ -140,12 +152,14 @@ def generate_weekly_prompts(
 
     system_prompt = """You are a thoughtful journaling assistant. Generate 5 weekly reflection questions
 based on the user's past week of diary entries. Questions should:
-- Reference specific entries using [[YYYY-MM-DD]] format
+- MUST reference at least one specific entry using [[YYYY-MM-DD]] format in each question
 - Help identify patterns and themes across the week
 - Encourage broader reflection on progress and direction
 - Be personal and specific (not generic)
 - Do NOT use emojis in your questions
 - Use plain text only
+
+IMPORTANT: Each question MUST include at least one [[YYYY-MM-DD]] backlink to show where the prompt came from.
 
 Format each question on a new line, numbered 1-5. Be concise."""
 
@@ -153,14 +167,14 @@ Format each question on a new line, numbered 1-5. Be concise."""
 
 {context}
 
-Generate 5 numbered prompts that help reflect on patterns, progress, and direction."""
+Generate 5 numbered prompts that help reflect on patterns, progress, and direction. Each prompt MUST include at least one [[YYYY-MM-DD]] backlink to reference where the prompt came from."""
 
     try:
         response = ollama_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
-            temperature=0.8,
-            max_tokens=500
+            temperature=PROMPT_TEMPERATURE,
+            max_tokens=WEEKLY_PROMPT_MAX_TOKENS
         )
 
         # Parse prompts from response
@@ -174,11 +188,11 @@ Generate 5 numbered prompts that help reflect on patterns, progress, and directi
                 if cleaned:
                     prompts.append(cleaned)
 
-        # Ensure we have exactly 5 prompts
-        if len(prompts) >= 5:
-            return prompts[:5]
+        # Ensure we have exactly the right number of prompts
+        if len(prompts) >= WEEKLY_PROMPT_COUNT:
+            return prompts[:WEEKLY_PROMPT_COUNT]
         elif prompts:
-            while len(prompts) < 5:
+            while len(prompts) < WEEKLY_PROMPT_COUNT:
                 prompts.append("What else comes to mind?")
             return prompts
         else:
@@ -190,7 +204,7 @@ Generate 5 numbered prompts that help reflect on patterns, progress, and directi
                 "What's ahead for next week?"
             ]
 
-    except Exception as e:
+    except RuntimeError as e:
         print(f"Warning: Failed to generate weekly prompts via LLM: {e}")
         return [
             "What were the key themes this week?",
@@ -207,14 +221,14 @@ def generate_prompts_for_date(
     ollama_client: OllamaClient
 ) -> List[str]:
     """Generate prompts for a specific date based on context."""
-    # Get past 3 calendar days (not last 3 entries)
-    past_dates = entry_manager.get_past_calendar_days(target_date, 3)
+    # Get past calendar days (not last N entries)
+    past_dates = entry_manager.get_past_calendar_days(target_date, PROMPT_CONTEXT_DAYS)
     recent_entries = entry_manager.get_entries_for_dates(past_dates)
 
-    # Sunday gets 5 weekly prompts, other days get 3 daily prompts
+    # Sunday gets weekly prompts, other days get daily prompts
     if is_sunday(target_date):
-        # For Sunday, look back 7 days for weekly context
-        past_week_dates = entry_manager.get_past_calendar_days(target_date, 7)
+        # For Sunday, look back for weekly context
+        past_week_dates = entry_manager.get_past_calendar_days(target_date, WEEKLY_CONTEXT_DAYS)
         week_entries = entry_manager.get_entries_for_dates(past_week_dates)
         return generate_weekly_prompts(week_entries, ollama_client)
     else:

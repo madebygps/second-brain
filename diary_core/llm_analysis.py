@@ -2,13 +2,26 @@
 from typing import List, Tuple
 from .entry_manager import DiaryEntry
 from .ollama_client import OllamaClient
+from .constants import (
+    MAX_SEMANTIC_LINK_CANDIDATES,
+    MAX_SEMANTIC_LINKS,
+    MAX_TOPIC_TAGS,
+    ENTRY_PREVIEW_LENGTH,
+    TARGET_PREVIEW_LENGTH,
+    SEMANTIC_TEMPERATURE,
+    SEMANTIC_MAX_TOKENS,
+    TAG_TEMPERATURE,
+    TAG_MAX_TOKENS,
+    MIN_TAG_LENGTH,
+    MAX_TAG_LENGTH
+)
 
 
 def generate_semantic_backlinks(
     target_entry: DiaryEntry,
     candidate_entries: List[DiaryEntry],
     ollama_client: OllamaClient,
-    max_links: int = 5
+    max_links: int = MAX_SEMANTIC_LINKS
 ) -> List[str]:
     """Use LLM to find semantically related entries."""
     if not candidate_entries:
@@ -16,10 +29,10 @@ def generate_semantic_backlinks(
 
     # Build context with candidates
     candidate_context = []
-    for entry in candidate_entries[:20]:  # Limit to 20 most recent to avoid token limits
+    for entry in candidate_entries[:MAX_SEMANTIC_LINK_CANDIDATES]:
         if entry.date == target_entry.date:
             continue
-        preview = entry.brain_dump[:200] if len(entry.brain_dump) > 200 else entry.brain_dump
+        preview = entry.brain_dump[:ENTRY_PREVIEW_LENGTH] if len(entry.brain_dump) > ENTRY_PREVIEW_LENGTH else entry.brain_dump
         if preview:
             candidate_context.append(f"[[{entry.date.isoformat()}]]: {preview}")
 
@@ -27,7 +40,7 @@ def generate_semantic_backlinks(
         return []
 
     candidates_text = "\n\n".join(candidate_context)
-    target_preview = target_entry.brain_dump[:500] if len(target_entry.brain_dump) > 500 else target_entry.brain_dump
+    target_preview = target_entry.brain_dump[:TARGET_PREVIEW_LENGTH] if len(target_entry.brain_dump) > TARGET_PREVIEW_LENGTH else target_entry.brain_dump
 
     system_prompt = f"""You are analyzing diary entries to find semantic connections. Given a target entry and a list of candidate entries, identify which candidates are most related to the target.
 
@@ -57,8 +70,8 @@ Which candidate entries are semantically related to the target? Return only the 
         response = ollama_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
-            temperature=0.3,  # Lower temperature for more focused results
-            max_tokens=200
+            temperature=SEMANTIC_TEMPERATURE,
+            max_tokens=SEMANTIC_MAX_TOKENS
         )
 
         # Parse dates from response
@@ -77,7 +90,7 @@ Which candidate entries are semantically related to the target? Return only the 
 
         return dates[:max_links]
 
-    except Exception as e:
+    except RuntimeError as e:
         print(f"Warning: LLM backlink generation failed: {e}")
         return []
 
@@ -85,7 +98,7 @@ Which candidate entries are semantically related to the target? Return only the 
 def generate_semantic_tags(
     entries: List[DiaryEntry],
     ollama_client: OllamaClient,
-    max_tags: int = 5
+    max_tags: int = MAX_TOPIC_TAGS
 ) -> List[str]:
     """Use LLM to generate semantic topic tags."""
     if not entries:
@@ -93,8 +106,8 @@ def generate_semantic_tags(
 
     # Build context from entries
     context_parts = []
-    for entry in entries[:5]:  # Use up to 5 entries for context
-        preview = entry.brain_dump[:200] if len(entry.brain_dump) > 200 else entry.brain_dump
+    for entry in entries[:MAX_TOPIC_TAGS]:
+        preview = entry.brain_dump[:ENTRY_PREVIEW_LENGTH] if len(entry.brain_dump) > ENTRY_PREVIEW_LENGTH else entry.brain_dump
         if preview:
             context_parts.append(preview)
 
@@ -118,7 +131,7 @@ Avoid:
 
 Tags should be:
 - Thematic and emotionally meaningful
-- 3-15 characters, lowercase
+- {MIN_TAG_LENGTH}-{MAX_TAG_LENGTH} characters, lowercase
 - Single words or hyphenated phrases
 - No emojis
 
@@ -138,8 +151,8 @@ Return only the tags (one per line, with # prefix), focusing on themes over topi
         response = ollama_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
-            temperature=0.5,
-            max_tokens=100
+            temperature=TAG_TEMPERATURE,
+            max_tokens=TAG_MAX_TOKENS
         )
 
         # Parse tags from response
@@ -149,16 +162,16 @@ Return only the tags (one per line, with # prefix), focusing on themes over topi
             if line.startswith("#"):
                 tag = line[1:].strip().lower()
                 # Validate tag length
-                if 3 <= len(tag) <= 15 and tag:
+                if MIN_TAG_LENGTH <= len(tag) <= MAX_TAG_LENGTH and tag:
                     tags.append(tag)
-            elif line and not line.startswith("#") and len(line) <= 15:
+            elif line and not line.startswith("#") and len(line) <= MAX_TAG_LENGTH:
                 # Handle cases where LLM forgets the # prefix
                 tag = line.strip().lower()
-                if 3 <= len(tag) <= 15:
+                if MIN_TAG_LENGTH <= len(tag) <= MAX_TAG_LENGTH:
                     tags.append(tag)
 
         return tags[:max_tags]
 
-    except Exception as e:
+    except RuntimeError as e:
         print(f"Warning: LLM tag generation failed: {e}")
         return []

@@ -3,6 +3,15 @@ from typing import List, Dict, Tuple, Set
 from collections import Counter
 import re
 from .entry_manager import DiaryEntry
+from .constants import (
+    JACCARD_SIMILARITY_THRESHOLD,
+    DEFAULT_THEMES_COUNT,
+    MEMORY_TRACE_TOP_THEMES,
+    TOP_CONNECTED_ENTRIES,
+    MIN_TAG_LENGTH,
+    MAX_TAG_LENGTH,
+    MIN_THEME_OCCURRENCES
+)
 
 
 def extract_words(text: str) -> Set[str]:
@@ -41,7 +50,7 @@ def jaccard_similarity(set1: Set[str], set2: Set[str]) -> float:
 def find_related_entries(
     target_entry: DiaryEntry,
     candidate_entries: List[DiaryEntry],
-    threshold: float = 0.08  # 8% Jaccard similarity
+    threshold: float = JACCARD_SIMILARITY_THRESHOLD
 ) -> List[Tuple[DiaryEntry, float]]:
     """Find entries related to target entry based on Jaccard similarity."""
     target_words = extract_words(target_entry.brain_dump)
@@ -67,7 +76,7 @@ def find_related_entries(
     return related
 
 
-def extract_themes(entries: List[DiaryEntry], top_n: int = 10) -> List[Tuple[str, int]]:
+def extract_themes(entries: List[DiaryEntry], top_n: int = DEFAULT_THEMES_COUNT) -> List[Tuple[str, int]]:
     """Extract most common themes (words) from entries."""
     all_words: List[str] = []
 
@@ -110,10 +119,10 @@ def generate_topic_tags(entries: List[DiaryEntry], max_tags: int = 5) -> List[st
     """Generate topic tags based on recurring themes."""
     themes = extract_themes(entries, top_n=max_tags * 2)
 
-    # Filter themes to good tag candidates (3-15 chars, common enough)
+    # Filter themes to good tag candidates
     tags = []
     for theme, count in themes:
-        if 3 <= len(theme) <= 15 and count >= 2:
+        if MIN_TAG_LENGTH <= len(theme) <= MAX_TAG_LENGTH and count >= MIN_THEME_OCCURRENCES:
             tags.append(theme)
             if len(tags) >= max_tags:
                 break
@@ -130,7 +139,7 @@ def create_memory_trace_report(entries: List[DiaryEntry]) -> str:
     sorted_entries = sorted(entries, key=lambda e: e.date)
 
     # Extract themes
-    themes = extract_themes(sorted_entries, top_n=15)
+    themes = extract_themes(sorted_entries, top_n=MEMORY_TRACE_TOP_THEMES)
 
     # Build report
     lines = [
@@ -143,7 +152,7 @@ def create_memory_trace_report(entries: List[DiaryEntry]) -> str:
         f""
     ]
 
-    for i, (theme, count) in enumerate(themes[:10], 1):
+    for i, (theme, count) in enumerate(themes[:DEFAULT_THEMES_COUNT], 1):
         lines.append(f"{i}. **{theme}** ({count} occurrences)")
 
     # Find highly connected entries (most related to others)
@@ -153,12 +162,12 @@ def create_memory_trace_report(entries: List[DiaryEntry]) -> str:
 
     entry_connections: Dict[str, int] = {}
     for entry in sorted_entries:
-        related = find_related_entries(entry, sorted_entries, threshold=0.08)
+        related = find_related_entries(entry, sorted_entries, threshold=JACCARD_SIMILARITY_THRESHOLD)
         if related:
             entry_connections[entry.date.isoformat()] = len(related)
 
     # Sort by number of connections
-    top_connected = sorted(entry_connections.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_connected = sorted(entry_connections.items(), key=lambda x: x[1], reverse=True)[:TOP_CONNECTED_ENTRIES]
 
     for date_str, num_connections in top_connected:
         lines.append(f"- [[{date_str}]] ({num_connections} related entries)")

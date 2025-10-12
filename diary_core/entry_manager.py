@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import date, datetime, timedelta
 from typing import Optional, List
 import re
+from .constants import MIN_SUBSTANTIAL_CONTENT_CHARS
 
 
 class DiaryEntry:
@@ -58,8 +59,8 @@ class DiaryEntry:
 
     @property
     def has_substantial_content(self) -> bool:
-        """Check if entry has >50 chars of actual writing in brain dump."""
-        return len(self.brain_dump) > 50
+        """Check if entry has substantial content in brain dump."""
+        return len(self.brain_dump) > MIN_SUBSTANTIAL_CONTENT_CHARS
 
     def get_backlinks(self) -> List[str]:
         """Extract all [[backlinks]] from content."""
@@ -126,12 +127,22 @@ class EntryManager:
         """List recent entries (up to N days back)."""
         entries = []
         today = date.today()
+        cutoff_date = today - timedelta(days=days)
 
-        for i in range(days):
-            check_date = today - timedelta(days=i)
-            entry = self.read_entry(check_date)
-            if entry:
-                entries.append(entry)
+        # Use glob to find existing markdown files
+        for path in sorted(self.diary_path.glob("*.md"), reverse=True):
+            try:
+                # Parse date from filename (YYYY-MM-DD.md)
+                date_str = path.stem
+                entry_date = date.fromisoformat(date_str)
+
+                # Only include entries within date range
+                if cutoff_date <= entry_date <= today:
+                    content = path.read_text(encoding="utf-8")
+                    entries.append(DiaryEntry(entry_date, content))
+            except (ValueError, OSError):
+                # Skip files that don't match date format or can't be read
+                continue
 
         return entries
 

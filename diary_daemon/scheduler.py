@@ -11,6 +11,10 @@ from diary_core.entry_manager import EntryManager
 from diary_core.ollama_client import OllamaClient
 from diary_core.analysis import create_memory_trace_report
 from diary_core.llm_analysis import generate_semantic_backlinks, generate_semantic_tags
+from diary_core.constants import (
+    PAST_ENTRIES_LOOKBACK_DAYS,
+    MIN_SUBSTANTIAL_CONTENT_CHARS
+)
 
 
 def auto_link_today():
@@ -26,7 +30,7 @@ def auto_link_today():
             return
 
         if not entry.has_substantial_content:
-            print(f"[{today}] Entry has insufficient content (<50 chars). Skipping auto-link.")
+            print(f"[{today}] Entry has insufficient content (<{MIN_SUBSTANTIAL_CONTENT_CHARS} chars). Skipping auto-link.")
             return
 
         # Initialize Ollama client
@@ -38,7 +42,7 @@ def auto_link_today():
             return
 
         # Get past entries
-        past_entries = entry_manager.list_entries(days=90)
+        past_entries = entry_manager.list_entries(days=PAST_ENTRIES_LOOKBACK_DAYS)
 
         # Use LLM to find semantic backlinks
         semantic_links = generate_semantic_backlinks(
@@ -120,7 +124,7 @@ def bulk_refresh_links():
             return
 
         count = 0
-        past_entries = entry_manager.list_entries(days=90)
+        past_entries = entry_manager.list_entries(days=PAST_ENTRIES_LOOKBACK_DAYS)
 
         for entry in entries:
             if not entry.has_substantial_content:

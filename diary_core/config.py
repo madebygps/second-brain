@@ -1,6 +1,7 @@
 """Configuration management for diary system."""
 from pathlib import Path
 from typing import Optional
+from functools import lru_cache
 from dotenv import load_dotenv
 import os
 
@@ -43,19 +44,12 @@ class Config:
         self.daemon_refresh_days = int(os.getenv("DAEMON_REFRESH_DAYS", "30"))
 
 
-# Global config instance
-_config: Optional[Config] = None
-
-
+@lru_cache(maxsize=1)
 def get_config() -> Config:
-    """Get or create global config instance."""
-    global _config
-    if _config is None:
-        _config = Config()
-    return _config
+    """Get or create global config instance (cached)."""
+    return Config()
 
 
-def set_config(config: Config) -> None:
-    """Set global config instance (for testing)."""
-    global _config
-    _config = config
+def clear_config_cache() -> None:
+    """Clear cached config (useful for testing)."""
+    get_config.cache_clear()

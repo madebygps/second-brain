@@ -22,6 +22,10 @@ from diary_core.llm_analysis import (
     generate_semantic_backlinks,
     generate_semantic_tags
 )
+from diary_core.constants import (
+    PAST_ENTRIES_LOOKBACK_DAYS,
+    MIN_SUBSTANTIAL_CONTENT_CHARS
+)
 
 app = typer.Typer(help="AI-powered diary with smart prompts and automatic backlinks")
 console = Console()
@@ -103,7 +107,7 @@ def link(
 
         # Check if entry has substantial content
         if not entry.has_substantial_content:
-            console.print(f"[yellow]Entry has less than 50 characters. Skipping linking.[/yellow]")
+            console.print(f"[yellow]Entry has less than {MIN_SUBSTANTIAL_CONTENT_CHARS} characters. Skipping linking.[/yellow]")
             return
 
         # Initialize Ollama client
@@ -123,7 +127,7 @@ def link(
             progress.add_task(description="Finding related entries with LLM...", total=None)
 
             # Get past entries for context
-            past_entries = entry_manager.list_entries(days=90)
+            past_entries = entry_manager.list_entries(days=PAST_ENTRIES_LOOKBACK_DAYS)
 
             # Use LLM to find semantic backlinks
             semantic_links = generate_semantic_backlinks(
@@ -327,7 +331,7 @@ def refresh(
             skipped = [e for e in entries if not e.has_substantial_content]
 
             if verbose and skipped:
-                console.print(f"[dim]Skipping {len(skipped)} entries with <50 chars:[/dim]")
+                console.print(f"[dim]Skipping {len(skipped)} entries with <{MIN_SUBSTANTIAL_CONTENT_CHARS} chars:[/dim]")
                 for entry in skipped[:5]:  # Show first 5
                     console.print(f"[dim]  - {entry.date.isoformat()} ({len(entry.brain_dump)} chars)[/dim]")
                 if len(skipped) > 5:
@@ -336,13 +340,13 @@ def refresh(
 
         if not entries_to_refresh:
             console.print(f"[yellow]No entries to refresh[/yellow]")
-            console.print(f"[dim]Found {len(entries)} entries total, but all have <50 chars of content[/dim]")
+            console.print(f"[dim]Found {len(entries)} entries total, but all have <{MIN_SUBSTANTIAL_CONTENT_CHARS} chars of content[/dim]")
             console.print(f"[dim]Use --all flag to refresh all entries regardless of length[/dim]")
             return
 
         console.print(f"[bold]Refreshing backlinks for {len(entries_to_refresh)} entries...[/bold]")
         if not all:
-            console.print(f"[dim]Skipping {len(entries) - len(entries_to_refresh)} entries with <50 chars (use --all to include)[/dim]\n")
+            console.print(f"[dim]Skipping {len(entries) - len(entries_to_refresh)} entries with <{MIN_SUBSTANTIAL_CONTENT_CHARS} chars (use --all to include)[/dim]\n")
         else:
             console.print()
 
@@ -366,7 +370,7 @@ def refresh(
             )
 
             updated_count = 0
-            past_entries = entry_manager.list_entries(days=90)
+            past_entries = entry_manager.list_entries(days=PAST_ENTRIES_LOOKBACK_DAYS)
 
             for entry in entries_to_refresh:
                 # Use LLM to find semantic backlinks
