@@ -1,7 +1,7 @@
 """LLM-powered analysis for semantic backlinks and tags."""
 from typing import List, Tuple
 from .entry_manager import DiaryEntry
-from .ollama_client import OllamaClient
+from .llm_client import LLMClient
 from .constants import (
     MAX_SEMANTIC_LINK_CANDIDATES,
     MAX_SEMANTIC_LINKS,
@@ -20,7 +20,7 @@ from .constants import (
 def generate_semantic_backlinks(
     target_entry: DiaryEntry,
     candidate_entries: List[DiaryEntry],
-    ollama_client: OllamaClient,
+    llm_client: LLMClient,
     max_links: int = MAX_SEMANTIC_LINKS
 ) -> List[str]:
     """Use LLM to find semantically related entries."""
@@ -67,7 +67,7 @@ Candidate entries:
 Which candidate entries are semantically related to the target? Return only the dates (YYYY-MM-DD), one per line, up to {max_links} entries."""
 
     try:
-        response = ollama_client.generate_sync(
+        response = llm_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
             temperature=SEMANTIC_TEMPERATURE,
@@ -97,7 +97,7 @@ Which candidate entries are semantically related to the target? Return only the 
 
 def generate_semantic_tags(
     entries: List[DiaryEntry],
-    ollama_client: OllamaClient,
+    llm_client: LLMClient,
     max_tags: int = MAX_TOPIC_TAGS
 ) -> List[str]:
     """Use LLM to generate semantic topic tags."""
@@ -148,7 +148,7 @@ What are the {max_tags} most meaningful thematic tags that capture the emotional
 Return only the tags (one per line, with # prefix), focusing on themes over topics."""
 
     try:
-        response = ollama_client.generate_sync(
+        response = llm_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
             temperature=TAG_TEMPERATURE,

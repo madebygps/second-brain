@@ -4,12 +4,12 @@ AI-powered journaling with smart prompts, semantic backlinks, and background aut
 
 ## Features
 
-- AI-generated reflection prompts based on your past entries
-- Semantic backlinks using LLM analysis (not just keyword matching)
+- AI-generated reflection prompts with topic diversity
+- Semantic backlinks using LLM analysis (not keyword matching)
 - Automatic topic tag generation
 - Background daemon for daily linking and weekly analysis
 - Obsidian-compatible markdown format
-- Fully local with Ollama (no cloud, no API costs)
+- **Flexible LLM**: Local (Ollama) or cloud (Azure OpenAI)
 
 ## Quick Start
 
@@ -17,50 +17,55 @@ AI-powered journaling with smart prompts, semantic backlinks, and background aut
 # Install dependencies
 uv sync
 
-# Configure paths
+# Configure
 cp .env.example .env
-# Edit .env with DIARY_PATH and PLANNER_PATH
+# Edit .env with paths and LLM provider
 
-# Install Ollama and pull model
+# Option A: Local (Ollama)
 ollama pull llama3.1:latest
 
-# Install CLI globally (optional)
-uv tool install .
+# Option B: Cloud (Azure OpenAI)
+# Set AZURE_OPENAI_* vars in .env
 
 # Create your first entry
-diary create today
+uv run diary create today
 ```
 
 ## Usage
 
 ```bash
 # Entry management
-diary create today              # Create entry with AI prompts
-diary link today                # Generate semantic backlinks
-diary refresh 30                # Bulk refresh past 30 days
+uv run diary create today       # Create entry with AI prompts
+uv run diary link today         # Generate semantic backlinks
+uv run diary refresh 30         # Bulk refresh past 30 days
 
 # Analysis
-diary analyze 30                # Memory trace report
-diary themes 7                  # Show recurring themes
-diary todos today               # Extract action items
+uv run diary analyze 30         # Memory trace report
+uv run diary themes 7           # Show recurring themes
+uv run diary todos today        # Extract action items
 
 # Browsing
-diary list 7                    # List recent entries
+uv run diary list 7             # List recent entries
 
 # Background automation
-diary-daemon start              # Auto-link at 11pm daily
-diary-daemon status             # Check daemon status
+uv run diary-daemon start       # Auto-link at 11pm daily
+uv run diary-daemon status      # Check daemon status
 ```
 
 ## Configuration
 
-Required in `.env`:
-- `DIARY_PATH` - Path to your Obsidian vault
+**Required:**
+- `DIARY_PATH` - Your Obsidian vault path
 - `PLANNER_PATH` - Path for extracted todos
 
-Optional:
-- `OLLAMA_MODEL` - Default: llama3.1:latest
-- `OLLAMA_URL` - Default: http://localhost:11434
+**Optional:**
+- `LLM_PROVIDER` - `ollama` (default) or `azure`
+
+**LLM Options:**
+- Ollama: `OLLAMA_MODEL`, `OLLAMA_URL`
+- Azure: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`
+
+**Daemon:**
 - `DAEMON_AUTO_LINK_TIME` - Default: 23:00
 - `DAEMON_WEEKLY_ANALYSIS` - Default: true
 
@@ -91,8 +96,8 @@ After writing, run `diary link today` to add semantic backlinks:
 ## Requirements
 
 - Python 3.13+
-- Ollama with llama3.1:latest
 - uv package manager
+- **Either**: Ollama with llama3.1:latest (local) **or** Azure OpenAI account (cloud)
 
 ## License
 

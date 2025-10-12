@@ -3,7 +3,7 @@ from datetime import date
 from typing import List
 import re
 from .entry_manager import DiaryEntry, EntryManager
-from .ollama_client import OllamaClient
+from .llm_client import LLMClient
 from .constants import (
     DAILY_PROMPT_COUNT,
     WEEKLY_PROMPT_COUNT,
@@ -40,7 +40,7 @@ def is_sunday(entry_date: date) -> bool:
 
 def generate_daily_prompts(
     recent_entries: List[DiaryEntry],
-    ollama_client: OllamaClient
+    llm_client: LLMClient
 ) -> List[str]:
     """Generate 3 daily reflection prompts based on recent entries."""
     if not recent_entries:
@@ -69,6 +69,13 @@ based on the user's recent diary entries. Questions should:
 - Do NOT use emojis in your questions
 - Use plain text only
 
+CRITICAL: Each of the 3 questions MUST address DIFFERENT topics from the entries.
+- Question 1: Focus on one theme/topic
+- Question 2: Focus on a DIFFERENT theme/topic
+- Question 3: Focus on yet ANOTHER distinct theme/topic
+
+Do NOT make multiple questions about the same topic or event. Spread across the diversity of experiences mentioned.
+
 IMPORTANT: Each question MUST include at least one [[YYYY-MM-DD]] backlink to show where the prompt came from.
 
 Format each question on a new line, numbered 1-3. Be concise."""
@@ -77,13 +84,34 @@ Format each question on a new line, numbered 1-3. Be concise."""
 
 {context}
 
-Generate 3 numbered prompts. Each prompt MUST include at least one [[YYYY-MM-DD]] backlink to reference where the prompt came from."""
+STEP 1: Scan ALL topics mentioned across the entries. List distinct themes like:
+- Professional work (teaching, projects, sessions)
+- Personal relationships (partner, family, friends, colleagues)
+- Health & wellness (sleep, diet, exercise, mental health)
+- Tools & systems (journaling, technology, workflows)
+- Personal growth (habits, skills, self-improvement)
+- Hobbies & interests (books, music, activities)
+
+STEP 2: Select 3 COMPLETELY DIFFERENT themes from Step 1.
+STEP 3: Generate 1 question for EACH of those 3 different themes.
+
+Example of GOOD diversity:
+- Q1: About teaching/work [[date]]
+- Q2: About relationship with partner [[date]]
+- Q3: About sleep/health habits [[date]]
+
+Example of BAD (too similar):
+- Q1: About Python sessions [[date]]
+- Q2: About Spanish office hours [[date]]  ← Same topic area!
+- Q3: About teaching community [[date]]  ← Same topic area!
+
+Each prompt MUST include at least one [[YYYY-MM-DD]] backlink."""
 
     try:
-        response = ollama_client.generate_sync(
+        response = llm_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
-            temperature=PROMPT_TEMPERATURE,
+            temperature=0.9,  # Higher temperature for more diversity
             max_tokens=PROMPT_MAX_TOKENS
         )
 
@@ -128,7 +156,7 @@ Generate 3 numbered prompts. Each prompt MUST include at least one [[YYYY-MM-DD]
 
 def generate_weekly_prompts(
     recent_entries: List[DiaryEntry],
-    ollama_client: OllamaClient
+    llm_client: LLMClient
 ) -> List[str]:
     """Generate 5 weekly reflection prompts based on past week."""
     if not recent_entries:
@@ -159,6 +187,15 @@ based on the user's past week of diary entries. Questions should:
 - Do NOT use emojis in your questions
 - Use plain text only
 
+CRITICAL: Each of the 5 questions MUST address DIFFERENT topics/themes from the week.
+- Question 1: Focus on one theme/area
+- Question 2: Focus on a DIFFERENT theme/area
+- Question 3: Focus on yet ANOTHER distinct theme/area
+- Question 4: Focus on a fourth distinct theme/area
+- Question 5: Focus on a fifth distinct theme/area
+
+Do NOT make multiple questions about the same topic. Maximize diversity across different aspects of the week.
+
 IMPORTANT: Each question MUST include at least one [[YYYY-MM-DD]] backlink to show where the prompt came from.
 
 Format each question on a new line, numbered 1-5. Be concise."""
@@ -167,10 +204,14 @@ Format each question on a new line, numbered 1-5. Be concise."""
 
 {context}
 
-Generate 5 numbered prompts that help reflect on patterns, progress, and direction. Each prompt MUST include at least one [[YYYY-MM-DD]] backlink to reference where the prompt came from."""
+Generate 5 numbered prompts about DIFFERENT aspects of the week. Each prompt MUST:
+1. Address a distinct theme/area (work, relationships, health, personal growth, etc.)
+2. Include at least one [[YYYY-MM-DD]] backlink to reference where the prompt came from
+
+Ensure maximum diversity - cover different life areas, NOT the same topic 5 times."""
 
     try:
-        response = ollama_client.generate_sync(
+        response = llm_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
             temperature=PROMPT_TEMPERATURE,
@@ -218,7 +259,7 @@ Generate 5 numbered prompts that help reflect on patterns, progress, and directi
 def generate_prompts_for_date(
     target_date: date,
     entry_manager: EntryManager,
-    ollama_client: OllamaClient
+    llm_client: LLMClient
 ) -> List[str]:
     """Generate prompts for a specific date based on context."""
     # Get past calendar days (not last N entries)
@@ -230,6 +271,6 @@ def generate_prompts_for_date(
         # For Sunday, look back for weekly context
         past_week_dates = entry_manager.get_past_calendar_days(target_date, WEEKLY_CONTEXT_DAYS)
         week_entries = entry_manager.get_entries_for_dates(past_week_dates)
-        return generate_weekly_prompts(week_entries, ollama_client)
+        return generate_weekly_prompts(week_entries, llm_client)
     else:
-        return generate_daily_prompts(recent_entries, ollama_client)
+        return generate_daily_prompts(recent_entries, llm_client)

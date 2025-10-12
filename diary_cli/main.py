@@ -7,9 +7,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
-from diary_core.config import get_config
+from diary_core.config import get_config, get_llm_client
 from diary_core.entry_manager import EntryManager, DiaryEntry
-from diary_core.ollama_client import OllamaClient
 from diary_core.template_generator import generate_prompts_for_date
 from diary_core.analysis import (
     find_related_entries,
@@ -65,15 +64,14 @@ def create(
         ) as progress:
             progress.add_task(description="Generating AI prompts...", total=None)
 
-            ollama_client = OllamaClient(config.ollama_url, config.ollama_model)
+            llm_client = get_llm_client()
 
-            # Check Ollama connection
-            if not ollama_client.check_connection_sync():
-                console.print("[red]Error: Cannot connect to Ollama. Is it running?[/red]")
-                console.print(f"Expected at: {config.ollama_url}")
+            # Check LLM connection
+            if not llm_client.check_connection_sync():
+                console.print(f"[red]Error: Cannot connect to LLM provider ({config.llm_provider})[/red]")
                 return
 
-            prompts = generate_prompts_for_date(entry_date, entry_manager, ollama_client)
+            prompts = generate_prompts_for_date(entry_date, entry_manager, llm_client)
 
         # Create entry (no memory links yet - those are added with 'diary link')
         entry = entry_manager.create_entry_template(entry_date, prompts)
@@ -110,13 +108,12 @@ def link(
             console.print(f"[yellow]Entry has less than {MIN_SUBSTANTIAL_CONTENT_CHARS} characters. Skipping linking.[/yellow]")
             return
 
-        # Initialize Ollama client
-        ollama_client = OllamaClient(config.ollama_url, config.ollama_model)
+        # Initialize LLM client
+        llm_client = get_llm_client()
 
-        # Check Ollama connection
-        if not ollama_client.check_connection_sync():
-            console.print("[red]Error: Cannot connect to Ollama. Is it running?[/red]")
-            console.print(f"Expected at: {config.ollama_url}")
+        # Check LLM connection
+        if not llm_client.check_connection_sync():
+            console.print(f"[red]Error: Cannot connect to LLM provider ({config.llm_provider})[/red]")
             return
 
         with Progress(
@@ -133,13 +130,13 @@ def link(
             semantic_links = generate_semantic_backlinks(
                 entry,
                 past_entries,
-                ollama_client,
+                llm_client,
                 max_links=5
             )
 
             # Generate topic tags using LLM
             context_entries = [entry]
-            tags = generate_semantic_tags(context_entries, ollama_client, max_tags=5)
+            tags = generate_semantic_tags(context_entries, llm_client, max_tags=5)
 
         # Get temporal links (past 3 days)
         past_dates = entry_manager.get_past_calendar_days(entry_date, 3)
@@ -350,13 +347,12 @@ def refresh(
         else:
             console.print()
 
-        # Initialize Ollama client
-        ollama_client = OllamaClient(config.ollama_url, config.ollama_model)
+        # Initialize LLM client
+        llm_client = get_llm_client()
 
-        # Check Ollama connection
-        if not ollama_client.check_connection_sync():
-            console.print("[red]Error: Cannot connect to Ollama. Is it running?[/red]")
-            console.print(f"Expected at: {config.ollama_url}")
+        # Check LLM connection
+        if not llm_client.check_connection_sync():
+            console.print(f"[red]Error: Cannot connect to LLM provider ({config.llm_provider})[/red]")
             return
 
         with Progress(
@@ -377,12 +373,12 @@ def refresh(
                 semantic_links = generate_semantic_backlinks(
                     entry,
                     past_entries,
-                    ollama_client,
+                    llm_client,
                     max_links=5
                 )
 
                 # Generate topic tags using LLM
-                tags = generate_semantic_tags([entry], ollama_client, max_tags=5)
+                tags = generate_semantic_tags([entry], llm_client, max_tags=5)
 
                 # Get temporal links
                 past_dates = entry_manager.get_past_calendar_days(entry.date, 3)

@@ -6,9 +6,8 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 import signal
 
-from diary_core.config import get_config
+from diary_core.config import get_config, get_llm_client
 from diary_core.entry_manager import EntryManager
-from diary_core.ollama_client import OllamaClient
 from diary_core.analysis import create_memory_trace_report
 from diary_core.llm_analysis import generate_semantic_backlinks, generate_semantic_tags
 from diary_core.constants import (
@@ -33,12 +32,12 @@ def auto_link_today():
             print(f"[{today}] Entry has insufficient content (<{MIN_SUBSTANTIAL_CONTENT_CHARS} chars). Skipping auto-link.")
             return
 
-        # Initialize Ollama client
-        ollama_client = OllamaClient(config.ollama_url, config.ollama_model)
+        # Initialize LLM client
+        llm_client = get_llm_client()
 
-        # Check Ollama connection
-        if not ollama_client.check_connection_sync():
-            print(f"[{today}] Error: Cannot connect to Ollama. Skipping auto-link.")
+        # Check LLM connection
+        if not llm_client.check_connection_sync():
+            print(f"[{today}] Error: Cannot connect to LLM provider ({config.llm_provider}). Skipping auto-link.")
             return
 
         # Get past entries
@@ -48,12 +47,12 @@ def auto_link_today():
         semantic_links = generate_semantic_backlinks(
             entry,
             past_entries,
-            ollama_client,
+            llm_client,
             max_links=5
         )
 
         # Generate topic tags using LLM
-        tags = generate_semantic_tags([entry], ollama_client, max_tags=5)
+        tags = generate_semantic_tags([entry], llm_client, max_tags=5)
 
         # Get temporal links
         past_dates = entry_manager.get_past_calendar_days(today, 3)
@@ -107,12 +106,12 @@ def bulk_refresh_links():
         config = get_config()
         entry_manager = EntryManager(config.diary_path)
 
-        # Initialize Ollama client
-        ollama_client = OllamaClient(config.ollama_url, config.ollama_model)
+        # Initialize LLM client
+        llm_client = get_llm_client()
 
-        # Check Ollama connection
-        if not ollama_client.check_connection_sync():
-            print(f"[{date.today()}] Error: Cannot connect to Ollama. Skipping bulk refresh.")
+        # Check LLM connection
+        if not llm_client.check_connection_sync():
+            print(f"[{date.today()}] Error: Cannot connect to LLM provider ({config.llm_provider}). Skipping bulk refresh.")
             return
 
         # Refresh past N days based on config
@@ -134,12 +133,12 @@ def bulk_refresh_links():
             semantic_links = generate_semantic_backlinks(
                 entry,
                 past_entries,
-                ollama_client,
+                llm_client,
                 max_links=5
             )
 
             # Generate topic tags using LLM
-            tags = generate_semantic_tags([entry], ollama_client, max_tags=5)
+            tags = generate_semantic_tags([entry], llm_client, max_tags=5)
 
             # Get temporal links
             past_dates = entry_manager.get_past_calendar_days(entry.date, 3)

@@ -2,9 +2,10 @@
 import httpx
 from typing import Optional, Dict, Any
 from .constants import LLM_TIMEOUT_SECONDS, LLM_CONNECTION_CHECK_TIMEOUT
+from .llm_client import LLMClient
 
 
-class OllamaClient:
+class OllamaClient(LLMClient):
     """Client for interacting with local Ollama API."""
 
     def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3.1:latest"):
