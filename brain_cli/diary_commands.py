@@ -286,7 +286,7 @@ def list(
 def themes(
     days: int = typer.Argument(7, help="Number of days to analyze")
 ):
-    """Show recurring themes from recent entries."""
+    """Show recurring themes from recent entries using LLM analysis."""
     try:
         config = get_config()
         entry_manager = EntryManager(config.diary_path)
@@ -297,15 +297,34 @@ def themes(
             console.print(f"[yellow]No entries found in past {days} days[/yellow]")
             return
 
-        theme_list = extract_themes(entries, top_n=15)
+        # Initialize LLM client
+        llm_client = get_llm_client()
+
+        # Check LLM connection
+        if not llm_client.check_connection_sync():
+            console.print(f"[red]Error: Cannot connect to LLM provider ({config.llm_provider})[/red]")
+            return
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            progress.add_task(description="Analyzing themes with LLM...", total=None)
+
+            # Use LLM to extract semantic themes (request more tags for themes view)
+            theme_list = generate_semantic_tags(entries, llm_client, max_tags=15)
+
+        if not theme_list:
+            console.print(f"[yellow]No themes identified in past {days} days[/yellow]")
+            return
 
         table = Table(title=f"Themes (past {days} days)")
         table.add_column("Rank", justify="right", style="cyan")
         table.add_column("Theme", style="bold")
-        table.add_column("Count", justify="right")
 
-        for i, (theme, count) in enumerate(theme_list, 1):
-            table.add_row(str(i), theme, str(count))
+        for i, theme in enumerate(theme_list, 1):
+            table.add_row(str(i), f"#{theme}")
 
         console.print(table)
 
