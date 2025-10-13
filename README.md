@@ -1,44 +1,28 @@
 # Second Brain
 
-AI-powered journaling with semantic backlinks and intelligent book notes search.
+AI-powered personal knowledge system with daily planning, reflective journaling, semantic backlinks, and intelligent book notes search.
 
 ## Features
 
-**Planning:**
-- Daily task management with action items
-- LLM-powered task extraction from yesterday's diary entry
+**Planning** (`brain plan`)
+- LLM extracts actionable tasks from yesterday's diary
 - Auto-carries forward unchecked todos from yesterday's plan
-- Simple, distraction-free format
+- Saves to `PLANNER_PATH` with backlinks to source entries
 
-**Diary:**
-- Evening reflection entries with AI-generated prompts
-- Semantic backlinks using LLM analysis (not keyword matching)
-- Automatic topic tag generation
-- Bulk refresh command for regenerating links
+**Diary** (`brain diary`)
+- Evening reflection with AI-generated prompts from past 3 days
+- Semantic backlinks via LLM analysis (not keyword matching)
+- Automatic topic tags and temporal connections
 - Obsidian-compatible markdown format
 
-**Notes Search:**
-- Search book notes via Azure AI Search
-- Semantic and text search modes
-- Rich formatted results
-- **Requires Azure AI Search** (no local alternative)
+**Notes Search** (`brain notes`)
+- Semantic and text search of book notes via Azure AI Search
+- Rich formatted results with highlights
 
-**Cost Tracking:**
-- Real-time Azure OpenAI usage tracking
-- Local SQLite database storage
-- Cost summaries, trends, and projections
-- Per-operation breakdowns (diary, planning, analysis)
-- Export to CSV for billing analysis
-
-**Logging:**
-- Rich-formatted colored console output
-- Clean UX with smart log suppression (no interruptions during spinners)
-- Multiple verbosity levels (--verbose, --debug)
-- File and console output options
-- Suppressed noisy third-party HTTP logs
-
-**LLM Support:**
-- Azure OpenAI - Full functionality for all commands
+**Cost Tracking** (`brain cost`)
+- Real-time Azure OpenAI usage tracking in local SQLite database
+- Comprehensive metadata: temperature, max_tokens, prompt/response lengths
+- Summaries, trends, projections, and per-operation breakdowns
 
 ## Quick Start
 
