@@ -5,6 +5,51 @@
 
 AI-powered personal knowledge system with daily planning, reflective journaling, semantic backlinks, and intelligent book notes search.
 
+## Installation
+
+### For End Users
+
+Install directly from GitHub:
+
+```bash
+# Using uv (recommended - fastest)
+uv tool install git+https://github.com/madebygps/second-brain.git
+
+# Or using pipx (isolated environment)
+pipx install git+https://github.com/madebygps/second-brain.git
+
+# Or using pip (system-wide)
+pip install git+https://github.com/madebygps/second-brain.git
+```
+
+After installation, the `brain` command will be available globally:
+```bash
+brain --help
+brain plan create today
+brain diary create today
+```
+
+### For Development
+
+```bash
+# Clone the repository
+git clone https://github.com/madebygps/second-brain.git
+cd second-brain
+
+# Install with uv
+uv sync
+
+# Set up pre-commit hooks
+uv run pre-commit install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your paths and Azure credentials
+
+# Run in development mode
+uv run brain --help
+```
+
 ## Features
 
 **Planning** (`brain plan`)
@@ -29,60 +74,58 @@ AI-powered personal knowledge system with daily planning, reflective journaling,
 
 ## Quick Start
 
+After installing (see [Installation](#installation)):
+
 ```bash
-# Install dependencies
-uv sync
-
-# Set up pre-commit hooks (optional but recommended)
-uv run pre-commit install
-
-# Configure
+# Configure (first time only)
 cp .env.example .env
 # Edit .env with your paths and Azure credentials
 
 # Morning: Create your planning entry (saves to PLANNER_PATH)
-uv run brain plan create today
+brain plan create today
 
 # Evening: Create your reflection entry (saves to DIARY_PATH)
-uv run brain diary create today
+brain diary create today
 
 # Search your book notes
-uv run brain notes search "discipline"
+brain notes search "discipline"
 ```
+
+> **Note:** If developing locally, prefix commands with `uv run` (e.g., `uv run brain plan create today`)
 
 ## Usage
 
 ```bash
 # Planning
-uv run brain plan create today        # Create daily plan with LLM task extraction
-uv run brain plan create tomorrow     # Plan for tomorrow
+brain plan create today        # Create daily plan with LLM task extraction
+brain plan create tomorrow     # Plan for tomorrow
 
 # Diary management
-uv run brain diary create today       # Create reflection entry
-uv run brain diary link today         # Generate semantic backlinks
-uv run brain diary refresh 30         # Bulk refresh past 30 days
-uv run brain diary list 7             # List recent entries
+brain diary create today       # Create reflection entry
+brain diary link today         # Generate semantic backlinks
+brain diary refresh 30         # Bulk refresh past 30 days
+brain diary list 7             # List recent entries
 
 # Analysis
-uv run brain diary report 30          # Memory trace report (activities & connections)
-uv run brain diary patterns 7         # Emotional & psychological patterns
+brain diary report 30          # Memory trace report (activities & connections)
+brain diary patterns 7         # Emotional & psychological patterns
 
 # Notes search
-uv run brain notes search "topic"     # Search book notes
-uv run brain notes search "topic" --semantic --detailed
-uv run brain notes status             # Check connection
+brain notes search "topic"     # Search book notes
+brain notes search "topic" --semantic --detailed
+brain notes status             # Check connection
 
 # Cost tracking and analysis
-uv run brain cost summary             # Usage summary for last 30 days
-uv run brain cost trends 30           # Daily cost trends
-uv run brain cost estimate            # Monthly cost projection
-uv run brain cost breakdown           # Per-operation breakdown
-uv run brain cost export data.json    # Export to JSON
-uv run brain cost pricing             # Show pricing
+brain cost summary             # Usage summary for last 30 days
+brain cost trends 30           # Daily cost trends
+brain cost estimate            # Monthly cost projection
+brain cost breakdown           # Per-operation breakdown
+brain cost export data.json    # Export to JSON
+brain cost pricing             # Show pricing
 
 # Logging (Rich-formatted, colored output)
-uv run brain --verbose <command>      # Show key operations
-uv run brain --debug <command>        # Full diagnostics with LLM details
+brain --verbose <command>      # Show key operations
+brain --debug <command>        # Full diagnostics with LLM details
 ```
 
 > **Clean UX:** By default, logs are suppressed during operations to avoid interrupting spinners. Use `--verbose` or `--debug` for detailed information with beautiful Rich formatting.

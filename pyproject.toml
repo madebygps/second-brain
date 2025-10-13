@@ -4,6 +4,20 @@ version = "0.1.0"
 description = "AI-powered journaling with smart prompts and automatic backlinks"
 readme = "README.md"
 requires-python = ">=3.13"
+authors = [
+    { name = "Gwyneth Peña-Siguenza", email = "gwyneth@madebygps.com" }
+]
+license = { text = "MIT" }
+keywords = ["journaling", "AI", "productivity", "knowledge-management", "obsidian", "azure-openai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business",
+    "Topic :: Utilities",
+]
 dependencies = [
     "typer>=0.15.1",
     "rich>=13.9.4",
@@ -12,6 +26,12 @@ dependencies = [
     "azure-search-documents>=11.6.0b7",
     "openai>=1.57.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/madebygps/second-brain"
+"Bug Tracker" = "https://github.com/madebygps/second-brain/issues"
+Documentation = "https://github.com/madebygps/second-brain#readme"
+"Source Code" = "https://github.com/madebygps/second-brain"
 
 [project.scripts]
 brain = "brain_cli.main:app"
@@ -22,6 +42,18 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["brain_core", "brain_cli"]
+
+[tool.hatch.build.targets.sdist]
+# Only include essential files in source distribution
+include = [
+    "/brain_core",
+    "/brain_cli",
+    "/tests",
+    "/LICENSE",
+    "/README.md",
+    "/pyproject.toml",
+    "/.env.example",
+]
 
 [tool.uv]
 package = true

@@ -1,5 +1,7 @@
 """Main CLI entry point for the brain system."""
 
+from importlib.metadata import PackageNotFoundError, version
+
 import typer
 
 from brain_cli.cost_commands import app as cost_app
@@ -16,7 +18,11 @@ from brain_core.logging_config import setup_logging
 def version_callback(value: bool):
     """Show version information."""
     if value:
-        typer.echo("Brain CLI v1.0.0")
+        try:
+            pkg_version = version("second-brain")
+        except PackageNotFoundError:
+            pkg_version = "0.1.0 (dev)"
+        typer.echo(f"Brain CLI v{pkg_version}")
         raise typer.Exit()
 
 
