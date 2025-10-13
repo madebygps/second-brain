@@ -1,12 +1,12 @@
 """Generate AI prompts based on recent diary entries."""
 from datetime import date
-from typing import List
+from typing import List, Optional
 import logging
 import time
+import re
 from .entry_manager import DiaryEntry, EntryManager
 from .llm_client import LLMClient
 from .llm_analysis import _truncate_text
-from .logging_config import log_operation_timing
 from .constants import (
     DAILY_PROMPT_COUNT,
     WEEKLY_PROMPT_COUNT,
@@ -60,17 +60,20 @@ def is_sunday(entry_date: date) -> bool:
 def generate_daily_prompts(
     recent_entries: List[DiaryEntry],
     llm_client: LLMClient,
-    target_date: date
+    target_date: date,
+    todays_plan: Optional[DiaryEntry] = None
 ) -> List[str]:
-    """Generate 3 daily reflection prompts based on recent entries.
+    """Generate 3 daily reflection prompts based on recent entries and today's plan.
     
-    Uses LLM to analyze recent diary entries and create personalized,
-    diverse reflection questions that reference specific past entries.
+    Uses LLM to analyze recent diary entries and today's plan tasks to create
+    personalized, diverse reflection questions that reference specific past entries
+    and encourage reflection on task completion.
     
     Args:
         recent_entries: List of recent diary entries for context (typically 3 days)
         llm_client: LLM client for prompt generation
         target_date: The date for which prompts are being generated
+        todays_plan: Optional plan entry for today to reflect on task completion
         
     Returns:
         List of 3 reflection prompt strings with [[YYYY-MM-DD]] backlinks
@@ -90,21 +93,61 @@ def generate_daily_prompts(
         if preview:
             context_parts.append(f"[[{date_str}]]: {preview}")
 
+    # Include today's plan tasks if available, categorized by completion status
+    completed_tasks = []
+    incomplete_tasks = []
+    if todays_plan and todays_plan.content:
+        date_str = target_date.isoformat()
+        # Extract Action Items section from plan
+        action_items_match = re.search(
+            r"## Action Items\n(.*?)(?=\n##|$)",
+            todays_plan.content,
+            re.DOTALL
+        )
+        if action_items_match:
+            tasks_text = action_items_match.group(1).strip()
+            # Parse individual tasks and their completion status
+            for line in tasks_text.split('\n'):
+                if '- [x]' in line.lower() or '- [X]' in line.lower():
+                    # Completed task
+                    task = re.sub(r'- \[[xX]\]\s*', '', line).strip()
+                    if task:
+                        completed_tasks.append(task)
+                elif '- [ ]' in line:
+                    # Incomplete task
+                    task = re.sub(r'- \[ \]\s*', '', line).strip()
+                    if task:
+                        incomplete_tasks.append(task)
+            
+            # Add categorized tasks to context
+            if completed_tasks or incomplete_tasks:
+                plan_context = f"Today's Plan [[{date_str}]]:"
+                if completed_tasks:
+                    plan_context += "\nCompleted: " + "; ".join(completed_tasks)
+                if incomplete_tasks:
+                    plan_context += "\nNot completed: " + "; ".join(incomplete_tasks)
+                context_parts.append(plan_context)
+
     context = "\n\n".join(context_parts)
     
     logger.debug(f"Generating daily prompts with {len(recent_entries)} recent entries")
 
     system_prompt = """You are a thoughtful journaling assistant. Generate 3 reflective questions
-based on the user's recent diary entries. Questions should:
+based on the user's recent diary entries and today's plan tasks. Questions should:
 - MUST reference at least one specific entry using [[YYYY-MM-DD]] format in each question
 - Build on themes, questions, or situations mentioned in the referenced entries
+- If today's plan tasks are provided, include at least ONE question about tasks
 - Encourage deeper reflection
 - Be personal and specific (not generic)
 - Do NOT use emojis in your questions
 - Use plain text only
 
+TASK-SPECIFIC LANGUAGE:
+- For COMPLETED tasks: Use celebratory/reflective language (e.g., "How did completing X feel?", "What did you learn from X?", "What went well with X?")
+- For INCOMPLETE tasks: Use curious/exploratory language (e.g., "What prevented you from completing X?", "Do you still want to pursue X?", "What would help you complete X?")
+
 CRITICAL: Each of the 3 questions MUST address DIFFERENT topics from the entries.
-- Question 1: Focus on one theme/topic
+- Question 1: Focus on one theme/topic (can be about today's tasks if provided)
 - Question 2: Focus on a DIFFERENT theme/topic
 - Question 3: Focus on yet ANOTHER distinct theme/topic
 
@@ -114,11 +157,25 @@ IMPORTANT: Each question MUST include at least one [[YYYY-MM-DD]] backlink to sh
 
 Format each question on a new line, numbered 1-3. Be concise."""
 
-    user_prompt = f"""Based on these recent diary entries, generate 3 thoughtful reflection prompts:
+    has_plan = todays_plan and "Today's Plan" in context
+    has_completed = completed_tasks and has_plan
+    has_incomplete = incomplete_tasks and has_plan
+    
+    plan_instruction = ""
+    if has_plan:
+        if has_completed and has_incomplete:
+            plan_instruction = "\n\nIMPORTANT: Today's plan includes both completed and incomplete tasks. Generate at least ONE question that:\n- Uses CELEBRATORY language for completed tasks (e.g., 'How did completing X feel from [[date]]?', 'What did you learn from finishing X from [[date]]?')\n- Uses CURIOUS language for incomplete tasks (e.g., 'What prevented you from completing X from [[date]]?', 'Do you still want to pursue X from [[date]]?')"
+        elif has_completed:
+            plan_instruction = "\n\nIMPORTANT: Today's plan tasks were completed. Generate at least ONE question using CELEBRATORY language (e.g., 'How did completing X feel from [[date]]?', 'What did you learn from finishing X from [[date]]?', 'What went well with X from [[date]]?')."
+        elif has_incomplete:
+            plan_instruction = "\n\nIMPORTANT: Today's plan tasks were not completed. Generate at least ONE question using CURIOUS/EXPLORATORY language (e.g., 'What prevented you from completing X from [[date]]?', 'Do you still want to pursue X from [[date]]?', 'What would help you complete X from [[date]]?')."
+    
+    user_prompt = f"""Based on these recent diary entries{' and today\'s plan tasks' if has_plan else ''}, generate 3 thoughtful reflection prompts:
 
 {context}
 
 STEP 1: Scan ALL topics mentioned across the entries. List distinct themes like:
+- Today's planned tasks/goals (if provided - focus on completion/progress)
 - Professional work (teaching, projects, sessions)
 - Personal relationships (partner, family, friends, colleagues)
 - Health & wellness (sleep, diet, exercise, mental health)
@@ -130,7 +187,7 @@ STEP 2: Select 3 COMPLETELY DIFFERENT themes from Step 1.
 STEP 3: Generate 1 question for EACH of those 3 different themes.
 
 Example of GOOD diversity:
-- Q1: About teaching/work [[date]]
+- Q1: About task completion from today's plan [[date]]
 - Q2: About relationship with partner [[date]]
 - Q3: About sleep/health habits [[date]]
 
@@ -139,7 +196,7 @@ Example of BAD (too similar):
 - Q2: About Spanish office hours [[date]]  ← Same topic area!
 - Q3: About teaching community [[date]]  ← Same topic area!
 
-Each prompt MUST include at least one [[YYYY-MM-DD]] backlink."""
+Each prompt MUST include at least one [[YYYY-MM-DD]] backlink.{plan_instruction}"""
 
     try:
         start_time = time.time()
@@ -155,6 +212,8 @@ Each prompt MUST include at least one [[YYYY-MM-DD]] backlink."""
 
         # Parse prompts from response
         prompts = _parse_prompts_from_response(response, DAILY_PROMPT_COUNT)
+        
+        logger.debug(f"Parsed {len(prompts)} prompts from LLM response")
 
         # Ensure we have exactly the right number of prompts
         if len(prompts) >= DAILY_PROMPT_COUNT:
@@ -162,9 +221,10 @@ Each prompt MUST include at least one [[YYYY-MM-DD]] backlink."""
             return prompts[:DAILY_PROMPT_COUNT]
         elif prompts:
             # If we got some but not enough, pad with generic ones
+            original_count = len(prompts)
             while len(prompts) < DAILY_PROMPT_COUNT:
                 prompts.append("What else is on your mind?")
-            logger.debug(f"Generated {len(prompts)} daily prompts (padded) in {elapsed:.2f}s")
+            logger.debug(f"Generated {original_count} daily prompts, padded to {len(prompts)} in {elapsed:.2f}s")
             return prompts
         else:
             # Fall back to generic prompts if parsing failed
@@ -321,6 +381,9 @@ def generate_prompts_for_date(
     past_dates = entry_manager.get_past_calendar_days(target_date, PROMPT_CONTEXT_DAYS)
     recent_entries = entry_manager.get_entries_for_dates(past_dates)
 
+    # Try to read today's plan for task completion reflection
+    todays_plan = entry_manager.read_entry(target_date, entry_type="plan")
+
     # Sunday gets weekly prompts, other days get daily prompts
     if is_sunday(target_date):
         # For Sunday, look back for weekly context
@@ -328,4 +391,4 @@ def generate_prompts_for_date(
         week_entries = entry_manager.get_entries_for_dates(past_week_dates)
         return generate_weekly_prompts(week_entries, llm_client, target_date)
     else:
-        return generate_daily_prompts(recent_entries, llm_client, target_date)
+        return generate_daily_prompts(recent_entries, llm_client, target_date, todays_plan)
