@@ -77,16 +77,18 @@ class DiaryEntry:
 class EntryManager:
     """Manage reading and writing diary entries."""
 
-    def __init__(self, diary_path: Path):
+    def __init__(self, diary_path: Path, planner_path: Optional[Path] = None):
         self.diary_path = diary_path
+        self.planner_path = planner_path if planner_path else diary_path
 
     def get_entry_path(self, entry_date: date, entry_type: str = "reflection") -> Path:
         """Get full path for a diary entry."""
         if entry_type == "plan":
             filename = f"{entry_date.isoformat()}-plan.md"
+            return self.planner_path / filename
         else:
             filename = f"{entry_date.isoformat()}.md"
-        return self.diary_path / filename
+            return self.diary_path / filename
 
     def entry_exists(self, entry_date: date, entry_type: str = "reflection") -> bool:
         """Check if entry exists for given date and type."""

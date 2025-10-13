@@ -26,7 +26,6 @@ class TestBrainCLI:
         assert result.exit_code == 0
         # Verify diary subcommands exist
         assert 'create' in result.stdout
-        assert 'plan' in result.stdout
         assert 'link' in result.stdout
         assert 'report' in result.stdout
         assert 'patterns' in result.stdout
@@ -72,53 +71,41 @@ class TestDiaryCommands:
 
         assert "No entries found" in result.stdout or result.exit_code == 0
 
-    @patch('brain_cli.diary_commands.get_config')
-    @patch('brain_cli.diary_commands.get_llm_client')
-    @patch('brain_cli.diary_commands.EntryManager')
-    @patch('brain_cli.diary_commands.generate_planning_prompts')
-    def test_diary_plan_command(self, mock_gen_prompts, mock_manager, mock_llm, mock_config, mock_env):
-        """Test diary plan command."""
+    @patch('brain_cli.plan_commands.get_config')
+    @patch('brain_cli.plan_commands.EntryManager')
+    def test_plan_command(self, mock_manager, mock_config, mock_env):
+        """Test plan create command."""
         # Setup mocks
         mock_config.return_value = Mock(
-            diary_path=mock_env["diary_path"]
+            diary_path=mock_env["diary_path"],
+            planner_path=mock_env["planner_path"]
         )
-        mock_llm_instance = Mock()
-        mock_llm_instance.check_connection_sync.return_value = True
-        mock_llm.return_value = mock_llm_instance
 
         mock_manager_instance = Mock()
         mock_manager_instance.entry_exists.return_value = False
         mock_manager_instance.read_entry.return_value = None
-        mock_manager_instance.create_plan_template.return_value = Mock(
-            filename="2025-10-12-plan.md",
-            date=Mock(isoformat=lambda: "2025-10-12")
-        )
+        mock_manager_instance.write_entry.return_value = None
         mock_manager.return_value = mock_manager_instance
 
-        mock_gen_prompts.return_value = [
-            "What are your priorities?",
-            "What needs preparation?",
-            "What unfinished items?"
-        ]
-
-        result = runner.invoke(brain_app, ["diary", "plan", "2025-10-12"])
+        result = runner.invoke(brain_app, ["plan", "create", "2025-10-12"])
 
         assert result.exit_code == 0
-        assert "Created plan entry" in result.stdout or "2025-10-12-plan.md" in result.stdout
+        assert "Created plan" in result.stdout
 
-    @patch('brain_cli.diary_commands.get_config')
-    @patch('brain_cli.diary_commands.EntryManager')
-    def test_diary_plan_already_exists(self, mock_manager, mock_config, mock_env):
-        """Test diary plan command when entry already exists."""
+    @patch('brain_cli.plan_commands.get_config')
+    @patch('brain_cli.plan_commands.EntryManager')
+    def test_plan_already_exists(self, mock_manager, mock_config, mock_env):
+        """Test plan create command when entry already exists."""
         mock_config.return_value = Mock(
-            diary_path=mock_env["diary_path"]
+            diary_path=mock_env["diary_path"],
+            planner_path=mock_env["planner_path"]
         )
 
         mock_manager_instance = Mock()
         mock_manager_instance.entry_exists.return_value = True
         mock_manager.return_value = mock_manager_instance
 
-        result = runner.invoke(brain_app, ["diary", "plan", "2025-10-12"])
+        result = runner.invoke(brain_app, ["plan", "create", "2025-10-12"])
 
         assert "already exists" in result.stdout.lower()
 

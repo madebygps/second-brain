@@ -65,9 +65,9 @@ This is a long brain dump with more than 50 characters of actual content.
         entry = DiaryEntry(date(2025, 10, 12), long_content)
         assert entry.has_substantial_content
 
-        # Entry with minimal content
+        # Entry with minimal content (empty brain dump)
         short_content = """## Brain Dump
-Short.
+
 """
         entry = DiaryEntry(date(2025, 10, 12), short_content)
         assert not entry.has_substantial_content

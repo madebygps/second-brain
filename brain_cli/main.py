@@ -6,6 +6,7 @@ import typer
 # Import subcommands
 from brain_cli.diary_commands import app as diary_app
 from brain_cli.notes_commands import app as notes_app
+from brain_cli.plan_commands import app as plan_app
 
 # Configure logging
 logging.basicConfig(
@@ -23,6 +24,7 @@ app = typer.Typer(
 # Register subcommands
 app.add_typer(diary_app, name="diary")
 app.add_typer(notes_app, name="notes")
+app.add_typer(plan_app, name="plan")
 
 
 if __name__ == "__main__":

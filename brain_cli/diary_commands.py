@@ -1,6 +1,5 @@
 """Diary management commands."""
 import typer
-import re
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -8,7 +7,7 @@ from datetime import date, timedelta
 
 from brain_core.config import get_config, get_llm_client
 from brain_core.entry_manager import EntryManager
-from brain_core.template_generator import generate_prompts_for_date, generate_planning_prompts
+from brain_core.template_generator import generate_prompts_for_date
 from brain_core.report_generator import create_memory_trace_report
 from brain_core.llm_analysis import (
     generate_semantic_backlinks,
@@ -112,7 +111,7 @@ def create(
         config = get_config()
         entry_date = parse_date_arg(date_arg)
 
-        entry_manager = EntryManager(config.diary_path)
+        entry_manager = EntryManager(config.diary_path, config.planner_path)
 
         # Check if entry already exists
         if entry_manager.entry_exists(entry_date):
@@ -149,81 +148,6 @@ def create(
 
 
 @app.command()
-def plan(
-    date_arg: str = typer.Argument("today", help="Date (today, tomorrow, or YYYY-MM-DD)")
-):
-    """Create a morning planning entry with focus on today's priorities."""
-    try:
-        config = get_config()
-
-        # Parse date - handle "tomorrow" as well
-        if date_arg.lower() == "tomorrow":
-            entry_date = date.today() + timedelta(days=1)
-        else:
-            entry_date = parse_date_arg(date_arg)
-
-        entry_manager = EntryManager(config.diary_path)
-
-        # Check if plan entry already exists
-        if entry_manager.entry_exists(entry_date, entry_type="plan"):
-            console.print(f"[yellow]Plan entry for {entry_date.isoformat()} already exists[/yellow]")
-            return
-
-        # Get yesterday's reflection entry for context
-        yesterday_date = entry_date - timedelta(days=1)
-        yesterday_entry = entry_manager.read_entry(yesterday_date, entry_type="reflection")
-
-        # Extract pending todos from yesterday's plan (if it exists)
-        pending_todos = []
-        yesterday_plan = entry_manager.read_entry(yesterday_date, entry_type="plan")
-        if yesterday_plan:
-            for line in yesterday_plan.content.split("\n"):
-                if re.match(r"^- \[ \]", line.strip()):
-                    todo_text = re.sub(r"^- \[ \]\s*", "", line.strip())
-                    if todo_text:
-                        pending_todos.append(f"{todo_text} (from [[{yesterday_date.isoformat()}]])")
-
-        # Generate planning prompts with progress indicator
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            progress.add_task(description="Generating planning prompts...", total=None)
-
-            llm_client = get_llm_client()
-
-            # Check LLM connection
-            if not check_llm_connection(llm_client):
-                return
-
-            # Generate prompts based on yesterday's reflection
-            if yesterday_entry and yesterday_entry.has_substantial_content:
-                prompts = generate_planning_prompts(yesterday_entry, llm_client)
-            else:
-                # Fallback prompts if no yesterday entry
-                prompts = [
-                    "What are your main priorities today?",
-                    "What meetings or events need preparation?",
-                    "What unfinished items need attention?"
-                ]
-
-        # Create plan entry
-        entry = entry_manager.create_plan_template(entry_date, prompts, pending_todos)
-
-        entry_manager.write_entry(entry)
-
-        console.print(f"[green]✓[/green] Created plan entry: [bold]{entry.filename}[/bold]")
-        console.print(f"[dim]Location: {config.diary_path / entry.filename}[/dim]")
-        if pending_todos:
-            console.print(f"[dim]Carried forward {len(pending_todos)} pending items from yesterday[/dim]")
-
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
-
-
-@app.command()
 def link(
     date_arg: str = typer.Argument("today", help="Date (today, yesterday, or YYYY-MM-DD)")
 ):
@@ -232,7 +156,7 @@ def link(
         config = get_config()
         entry_date = parse_date_arg(date_arg)
 
-        entry_manager = EntryManager(config.diary_path)
+        entry_manager = EntryManager(config.diary_path, config.planner_path)
 
         # Check if entry exists
         entry = entry_manager.read_entry(entry_date)
@@ -288,7 +212,7 @@ def report(
     try:
         config = get_config()
         llm_client = get_llm_client()
-        entry_manager = EntryManager(config.diary_path)
+        entry_manager = EntryManager(config.diary_path, config.planner_path)
 
         with Progress(
             SpinnerColumn(),
@@ -319,7 +243,7 @@ def list(
     """List recent diary entries."""
     try:
         config = get_config()
-        entry_manager = EntryManager(config.diary_path)
+        entry_manager = EntryManager(config.diary_path, config.planner_path)
 
         entries = entry_manager.list_entries(days=days)
 
@@ -357,7 +281,7 @@ def patterns(
     """Identify emotional and psychological patterns from recent entries using LLM analysis."""
     try:
         config = get_config()
-        entry_manager = EntryManager(config.diary_path)
+        entry_manager = EntryManager(config.diary_path, config.planner_path)
 
         entries = entry_manager.list_entries(days=days)
 
@@ -409,7 +333,7 @@ def refresh(
     """Refresh backlinks and tags for all entries in the past N days."""
     try:
         config = get_config()
-        entry_manager = EntryManager(config.diary_path)
+        entry_manager = EntryManager(config.diary_path, config.planner_path)
 
         entries = entry_manager.list_entries(days=days)
 

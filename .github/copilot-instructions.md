@@ -32,16 +32,20 @@ Core functionality with comprehensive type hints and dataclasses:
 ### brain_cli/ - CLI Interface
 User-facing commands with typer:
 
-- `main.py` - Root CLI entry point (91% coverage)
-- `diary_commands.py` - Diary management (33% coverage)
+- `main.py` - Root CLI entry point (92% coverage)
+- `diary_commands.py` - Diary management (23% coverage)
+- `plan_commands.py` - Daily planning (73% coverage)
 - `notes_commands.py` - Book notes search (44% coverage)
 
 ## Common Commands
 
 ```bash
+# Planning commands
+uv run brain plan create          # Create daily plan (auto-carries todos)
+uv run brain plan create tomorrow # Plan for tomorrow
+
 # Diary commands
 uv run brain diary create         # Create evening reflection entry
-uv run brain diary plan           # Create morning plan (auto-carries todos)
 uv run brain diary link           # Generate semantic backlinks + tags
 uv run brain diary report 7       # Memory trace analysis for 7 days
 uv run brain diary patterns 7     # Statistical patterns
@@ -87,9 +91,11 @@ uv run pytest tests/ --cov        # With coverage
 Two entry types with specific formats:
 
 **Morning Plan** (YYYY-MM-DD-plan.md):
-- Daily Focus prompts generated from yesterday's reflection
-- Action Items section (auto-carries forward unchecked todos)
-- Brain Dump section for free-form thoughts
+- Action Items section ONLY
+- LLM intelligently extracts actionable tasks from yesterday's diary entry
+- Auto-carries forward unchecked todos from yesterday's plan
+- All tasks include backlinks to source entries
+- Simple, distraction-free format for task management
 
 **Evening Reflection** (YYYY-MM-DD.md):
 - Reflection Prompts (AI-generated from past 3 calendar days)
