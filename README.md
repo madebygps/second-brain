@@ -168,13 +168,18 @@ After writing, run `brain diary link today` to add semantic backlinks:
 
 ## Testing
 
+Minimal test suite focused on preventing data loss:
+
 ```bash
 uv run pytest                    # Run all tests
 uv run pytest --cov              # Run with coverage
-uv run pytest tests/brain_core/  # Run specific module
 ```
 
-**Coverage**: 74 tests with 45% overall coverage, 96% on critical paths (plan_commands.py)
+**Coverage**: 7 essential tests covering:
+- Configuration validation (missing paths)
+- File naming (reflection vs. plan entries)
+- Write/read cycles (prevent data loss)
+- Path separation (diary vs. planner)
 
 ## License
 
