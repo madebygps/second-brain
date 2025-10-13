@@ -16,7 +16,6 @@ DEFAULT_TOP_RESULTS = 10
 PREVIEW_LENGTH = 80
 TABLE_COL_WIDTH_INDEX = 3
 TABLE_COL_WIDTH_CATEGORY = 12
-TABLE_COL_WIDTH_WORDS = 7
 TABLE_COL_WIDTH_SCORE = 7
 
 
@@ -59,9 +58,6 @@ def search(
     top: int = typer.Option(
         DEFAULT_TOP_RESULTS, "--top", "-n", help="Maximum number of results to return"
     ),
-    semantic: bool = typer.Option(
-        False, "--semantic", "-s", help="Use semantic search (slower but more relevant)"
-    ),
     detailed: bool = typer.Option(False, "--detailed", "-d", help="Show full content of results"),
 ):
     """Search book notes using Azure AI Search.
@@ -69,7 +65,6 @@ def search(
     Examples:
         brain notes search "discipline and habits"
         brain notes search "productivity tips" --top 5
-        brain notes search "notes on learning" --semantic
         brain notes search "deep work" --detailed
     """
     try:
@@ -82,21 +77,14 @@ def search(
 
         # Perform search
         with console.status(f"[bold cyan]Searching for '{query}'...", spinner="dots"):
-            if semantic:
-                results = search_client.semantic_search(query, top=top)
-                search_type = "Semantic"
-            else:
-                results = search_client.search(query, top=top)
-                search_type = "Text"
+            results = search_client.search(query, top=top)
 
         if not results:
             console.print(f"\n[yellow]No results found for '{query}'[/yellow]")
             return
 
         # Display results
-        console.print(
-            f"\n[bold cyan]{search_type} Search Results[/bold cyan] for: [bold]'{query}'[/bold]"
-        )
+        console.print(f"\n[bold cyan]Search Results[/bold cyan] for: [bold]'{query}'[/bold]")
         console.print(f"[dim]Found {len(results)} result(s)[/dim]\n")
 
         if detailed:
@@ -106,9 +94,8 @@ def search(
                 panel_content = f"**Book:** {result.title}\n"
                 panel_content += f"**Category:** {result.category}\n"
                 panel_content += f"**Source:** {result.source}\n"
-                panel_content += (
-                    f"**Score:** {result.score:.2f} | **Words:** {result.word_count}\n\n"
-                )
+                panel_content += f"**File:** {result.file_path}\n"
+                panel_content += f"**Score:** {result.score:.2f}\n\n"
                 panel_content += "---\n\n"
                 panel_content += result.content
 
@@ -126,7 +113,6 @@ def search(
             table.add_column("#", style="dim", width=TABLE_COL_WIDTH_INDEX, justify="right")
             table.add_column("Book", style="bold")
             table.add_column("Category", style="yellow", width=TABLE_COL_WIDTH_CATEGORY)
-            table.add_column("Words", justify="right", width=TABLE_COL_WIDTH_WORDS)
             table.add_column("Score", justify="right", width=TABLE_COL_WIDTH_SCORE)
             table.add_column("Preview", style="dim")
 
@@ -137,7 +123,6 @@ def search(
                     str(i),
                     result.title,
                     result.category,
-                    str(result.word_count),
                     f"{result.score:.2f}",
                     preview,
                 )

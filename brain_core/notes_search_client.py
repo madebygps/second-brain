@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
+from azure.search.documents.models import VectorizedQuery
 
 
 @dataclass
@@ -15,10 +16,8 @@ class SearchResult:
     content: str
     source: str
     category: str
-    file_name: str
-    word_count: int
+    file_path: str
     score: float
-    created_at: str
     metadata: dict
 
 
@@ -63,32 +62,35 @@ class AzureSearchNotesClient:
                     content=result.get("content", ""),
                     source=result.get("source", "Unknown"),
                     category=result.get("category", ""),
-                    file_name=result.get("file_name", ""),
-                    word_count=result.get("word_count", 0),
+                    file_path=result.get("file_path", ""),
                     score=result.get("@search.score", 0.0),
-                    created_at=result.get("created_at", ""),
                     metadata={k: v for k, v in result.items() if not k.startswith("@")},
                 )
             )
 
         return search_results
 
-    def semantic_search(self, query: str, top: int = 10) -> list[SearchResult]:
-        """Perform a semantic search using Azure's semantic ranking.
+    def vector_search(
+        self, query_vector: list[float], top: int = 10, text_query: str | None = None
+    ) -> list[SearchResult]:
+        """Perform a vector search using embeddings.
 
         Args:
-            query: Search query text
+            query_vector: Query embedding vector (384 dimensions for text-embedding-3-small)
             top: Maximum number of results to return
+            text_query: Optional text query for hybrid search
 
         Returns:
-            List of SearchResult objects with semantic relevance
+            List of SearchResult objects with vector similarity
         """
+        vector_query = VectorizedQuery(
+            vector=query_vector, k_nearest_neighbors=top, fields="content_vector"
+        )
+
         results = self.client.search(
-            search_text=query,
+            search_text=text_query,
+            vector_queries=[vector_query],
             top=top,
-            query_type="semantic",
-            semantic_configuration_name="default",
-            include_total_count=True,
         )
 
         search_results = []
@@ -100,10 +102,8 @@ class AzureSearchNotesClient:
                     content=result.get("content", ""),
                     source=result.get("source", "Unknown"),
                     category=result.get("category", ""),
-                    file_name=result.get("file_name", ""),
-                    word_count=result.get("word_count", 0),
-                    score=result.get("@search.reranker_score", result.get("@search.score", 0.0)),
-                    created_at=result.get("created_at", ""),
+                    file_path=result.get("file_path", ""),
+                    score=result.get("@search.score", 0.0),
                     metadata={k: v for k, v in result.items() if not k.startswith("@")},
                 )
             )

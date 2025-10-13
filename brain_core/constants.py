@@ -70,3 +70,7 @@ AZURE_OPENAI_PRICING = {
         "output": 0.002 / 1000,
     },
 }
+
+# Azure AI Search - Vector embeddings
+EMBEDDING_MODEL = "text-embedding-3-small"  # Azure OpenAI embedding model
+EMBEDDING_DIMENSIONS = 384  # Dimensions for text-embedding-3-small
