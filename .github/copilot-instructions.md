@@ -7,7 +7,7 @@ AI-powered journaling system with markdown entries, semantic backlinks, and LLM-
 **Tech Stack:**
 - Python 3.13+ with full type hints
 - Package manager: `uv` (ALWAYS use `uv`, never `pip`)
-- Testing: pytest with 64 tests, 50% coverage
+- Testing: pytest with 57 tests, 47% coverage
 - CLI: typer (add_completion=False) + rich
 - LLM: Azure OpenAI (required)
 - Search: Azure AI Search for book notes
@@ -34,14 +34,14 @@ User-facing commands with typer:
 
 - `main.py` - Root CLI entry point (92% coverage)
 - `diary_commands.py` - Diary management (23% coverage)
-- `plan_commands.py` - Daily planning (73% coverage)
+- `plan_commands.py` - Daily planning with LLM task extraction (49% coverage)
 - `notes_commands.py` - Book notes search (44% coverage)
 
 ## Common Commands
 
 ```bash
 # Planning commands
-uv run brain plan create          # Create daily plan (auto-carries todos)
+uv run brain plan create          # Create daily plan with LLM task extraction
 uv run brain plan create tomorrow # Plan for tomorrow
 
 # Diary commands
@@ -69,21 +69,21 @@ uv run pytest tests/ --cov        # With coverage
 
 ## Configuration (.env)
 
-**Required:**
-- `DIARY_PATH` - Path to Obsidian vault or markdown directory
-- `PLANNER_PATH` - Path for extracted todo files
+**Required Paths:**
+- `DIARY_PATH` - Path to Obsidian vault or markdown directory (for reflection entries)
+- `PLANNER_PATH` - Path to directory for daily plan files (separate from diary)
 
-**Azure OpenAI (required):**
+**Azure OpenAI (required for all LLM features):**
 - `AZURE_OPENAI_API_KEY` - API key
 - `AZURE_OPENAI_ENDPOINT` - Service endpoint
 - `AZURE_OPENAI_DEPLOYMENT` - Model deployment name (e.g., gpt-4o)
 - `AZURE_OPENAI_API_VERSION` - Default: 2024-02-15-preview
-- ✅ **Full functionality:** Supports both `brain diary` and `brain notes` commands.
+- ✅ **Full functionality:** Diary prompts, task extraction, semantic analysis, backlinks, tags, reports
 
-**Azure AI Search (required for `brain notes` search):**
+**Azure AI Search (required for `brain notes` search only):**
 - `AZURE_SEARCH_ENDPOINT` - Search service endpoint
 - `AZURE_SEARCH_API_KEY` - API key
-- `AZURE_SEARCH_INDEX_NAME` - Index name (default: notes-index)
+- `AZURE_SEARCH_INDEX_NAME` - Index name (default: second-brain-notes)
 - ⚠️ **No local alternative:** This is a separate Azure service.
 
 ## Entry Structure
@@ -91,10 +91,15 @@ uv run pytest tests/ --cov        # With coverage
 Two entry types with specific formats:
 
 **Morning Plan** (YYYY-MM-DD-plan.md):
+- Saved to `PLANNER_PATH` (separate from diary)
 - Action Items section ONLY
-- LLM intelligently extracts actionable tasks from yesterday's diary entry
+- LLM intelligently extracts actionable tasks from yesterday's diary entry:
+  - Identifies incomplete/pending tasks
+  - Extracts follow-ups from meetings
+  - Filters out completed activities and vague intentions
 - Auto-carries forward unchecked todos from yesterday's plan
-- All tasks include backlinks to source entries
+- All tasks include backlinks to source entries (e.g., "from [[2025-10-14]]")
+- Combines both sources (diary + plan) with deduplication
 - Simple, distraction-free format for task management
 
 **Evening Reflection** (YYYY-MM-DD.md):
@@ -142,16 +147,21 @@ Two entry types with specific formats:
 ## Key Implementation Details
 
 - **Calendar-based context**: Uses past 3 calendar days, not last 3 entries
-- **Linking threshold**: Requires >50 chars in Brain Dump section
+- **Linking threshold**: Requires >1 char in Brain Dump section (MIN_SUBSTANTIAL_CONTENT_CHARS = 1)
 - **Semantic backlinks**: LLM-powered with confidence scores (high/medium/low)
 - **Topic tags**: Emotional/psychological themes, not surface topics
 - **Entity extraction**: People, places, projects, themes
+- **Task extraction**: LLM analyzes diary entries for actionable tasks (temperature=0.4)
+- **File separation**: Plans save to PLANNER_PATH, reflections save to DIARY_PATH
 - **88% API call reduction**: Single-pass analysis vs legacy bidirectional
 
 ## Module Relationships
 
 ```
 CLI Layer (brain_cli/)
+├── diary_commands.py → report_generator.py, llm_analysis.py
+├── plan_commands.py → extract_tasks_from_diary() → LLM
+└── notes_commands.py → notes_search_client.py
     ↓
 report_generator.py (orchestration)
     ↓ uses
@@ -161,9 +171,10 @@ llm_client.py → azure_openai_client.py
 ```
 
 **Separation of Concerns:**
-- `llm_analysis.py` = Stateless atomic operations
-- `report_generator.py` = Stateful orchestration
-- `entry_manager.py` = I/O and parsing only
+- `llm_analysis.py` = Stateless atomic operations (backlinks, tags, entities)
+- `report_generator.py` = Stateful orchestration (reports, patterns)
+- `plan_commands.py` = Task extraction from diary using LLM
+- `entry_manager.py` = I/O and parsing only (supports both diary_path and planner_path)
 
 ## Important Notes
 
@@ -185,19 +196,26 @@ llm_client.py → azure_openai_client.py
 - Removed Ollama client (195 lines) - Azure OpenAI only
 - Removed scheduler/daemon system (312 lines, 0% coverage)
 - Removed todos command (redundant with plan command)
-- Total code reduction: ~500 lines
+- Removed `generate_planning_prompts()` - plans no longer have prompts
+- Total code reduction: ~600 lines
 
 **Module Improvements:**
 - Renamed `analysis.py` → `report_generator.py` (clearer purpose)
 - Renamed `azure_client.py` → `azure_openai_client.py` (clarity)
 - Renamed `azure_search_client.py` → `notes_search_client.py` (clarity)
-- Moved `extract_todos()` to `entry_manager.py` (better organization)
+- Moved plan command from diary to separate `plan_commands.py` module
+- Updated `EntryManager` to accept separate diary_path and planner_path
+
+**New Features:**
+- LLM-powered task extraction from diary entries (`extract_tasks_from_diary()`)
+- Plan entries now save to PLANNER_PATH (separate from diary)
+- Combines tasks from both diary analysis and unchecked plan items
+- Added TASK_EXTRACTION_TEMPERATURE and TASK_EXTRACTION_MAX_TOKENS constants
 
 **Code Quality:**
 - Converted `SemanticLink` to dataclass (type safety)
 - Extracted all magic numbers to constants
-- Added 4 helper functions for DRY principle (2 in diary, 2 in notes)
-- Added timing metrics to all LLM operations
+- Added timing metrics to all LLM operations including task extraction
 - Comprehensive docstrings on all helpers
-- Fixed 4 critical bugs in diary_commands
-- Improved from 47% → 50% test coverage
+- Maintained 47% test coverage with 57 passing tests
+- Added progress spinner for task extraction
