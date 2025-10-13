@@ -110,6 +110,80 @@ class TestEntryManager:
         path = manager.get_entry_path(date(2025, 10, 12), entry_type="plan")
         assert path == temp_dir / "2025-10-12-plan.md"
 
+    def test_separate_planner_path(self, temp_dir):
+        """Test EntryManager with separate planner_path."""
+        diary_dir = temp_dir / "diary"
+        planner_dir = temp_dir / "planner"
+        diary_dir.mkdir()
+        planner_dir.mkdir()
+
+        manager = EntryManager(diary_dir, planner_dir)
+
+        # Reflection should go to diary_path
+        reflection_path = manager.get_entry_path(date(2025, 10, 12), entry_type="reflection")
+        assert reflection_path == diary_dir / "2025-10-12.md"
+
+        # Plan should go to planner_path
+        plan_path = manager.get_entry_path(date(2025, 10, 12), entry_type="plan")
+        assert plan_path == planner_dir / "2025-10-12-plan.md"
+
+    def test_planner_path_defaults_to_diary_path(self, temp_dir):
+        """Test that planner_path defaults to diary_path if not specified."""
+        manager = EntryManager(temp_dir)
+
+        # Both should use the same path
+        reflection_path = manager.get_entry_path(date(2025, 10, 12), entry_type="reflection")
+        plan_path = manager.get_entry_path(date(2025, 10, 12), entry_type="plan")
+        
+        assert reflection_path.parent == plan_path.parent
+        assert reflection_path.parent == temp_dir
+
+    def test_write_entry_to_separate_paths(self, temp_dir):
+        """Test writing entries to separate diary and planner paths."""
+        diary_dir = temp_dir / "diary"
+        planner_dir = temp_dir / "planner"
+        diary_dir.mkdir()
+        planner_dir.mkdir()
+
+        manager = EntryManager(diary_dir, planner_dir)
+        test_date = date(2025, 10, 12)
+
+        # Write reflection entry
+        reflection = DiaryEntry(test_date, "Reflection content", entry_type="reflection")
+        manager.write_entry(reflection)
+        assert (diary_dir / "2025-10-12.md").exists()
+        assert not (planner_dir / "2025-10-12.md").exists()
+
+        # Write plan entry
+        plan = DiaryEntry(test_date, "Plan content", entry_type="plan")
+        manager.write_entry(plan)
+        assert (planner_dir / "2025-10-12-plan.md").exists()
+        assert not (diary_dir / "2025-10-12-plan.md").exists()
+
+    def test_read_entry_from_separate_paths(self, temp_dir):
+        """Test reading entries from separate diary and planner paths."""
+        diary_dir = temp_dir / "diary"
+        planner_dir = temp_dir / "planner"
+        diary_dir.mkdir()
+        planner_dir.mkdir()
+
+        manager = EntryManager(diary_dir, planner_dir)
+        test_date = date(2025, 10, 12)
+
+        # Write entries to separate directories
+        (diary_dir / "2025-10-12.md").write_text("Reflection content")
+        (planner_dir / "2025-10-12-plan.md").write_text("Plan content")
+
+        # Read reflection from diary_path
+        reflection = manager.read_entry(test_date, entry_type="reflection")
+        assert reflection is not None
+        assert reflection.content == "Reflection content"
+
+        # Read plan from planner_path
+        plan = manager.read_entry(test_date, entry_type="plan")
+        assert plan is not None
+        assert plan.content == "Plan content"
+
     def test_entry_exists_reflection(self, temp_dir):
         """Test entry_exists for reflection entry."""
         manager = EntryManager(temp_dir)
