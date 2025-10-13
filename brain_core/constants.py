@@ -4,16 +4,16 @@
 MIN_SUBSTANTIAL_CONTENT_CHARS = 50
 
 # LLM Analysis limits
-MAX_SEMANTIC_LINK_CANDIDATES = 20
-MAX_SEMANTIC_LINKS = 5
-MAX_TOPIC_TAGS = 5
-ENTRY_PREVIEW_LENGTH = 400  # Increased for better topic diversity
-TARGET_PREVIEW_LENGTH = 500
+MAX_SEMANTIC_LINK_CANDIDATES = 20  # Max number of candidate entries to compare
+MAX_SEMANTIC_LINKS = 5  # Max links to include in final results
+MAX_TOPIC_TAGS = 5  # Max topic tags to generate per entry
+MAX_ENTRIES_FOR_TAG_CONTEXT = 5  # Max entries to analyze for tag generation
 
-# Jaccard similarity threshold
-JACCARD_SIMILARITY_THRESHOLD = 0.08
+# Preview lengths for LLM context (characters)
+ENTRY_PREVIEW_LENGTH = 400  # For candidate entries in lists (shorter for token efficiency)
+TARGET_PREVIEW_LENGTH = 500  # For main entry being analyzed (longer for better matching)
 
-# Analysis parameters
+# Analysis parameters 
 DEFAULT_THEMES_COUNT = 10
 MEMORY_TRACE_TOP_THEMES = 15
 TOP_CONNECTED_ENTRIES = 5
@@ -32,15 +32,17 @@ PROMPT_MAX_TOKENS = 300
 WEEKLY_PROMPT_MAX_TOKENS = 500
 
 # Semantic analysis
+MIN_CONTENT_FOR_ENTITY_EXTRACTION = 50  # Minimum chars needed for entity extraction
+ENTITY_EXTRACTION_MAX_TOKENS = 200  # Max tokens for entity extraction response
+SEMANTIC_BACKLINKS_MAX_TOKENS = 400  # Max tokens for semantic backlinks response
 SEMANTIC_TEMPERATURE = 0.3
-SEMANTIC_MAX_TOKENS = 200
+SEMANTIC_MAX_TOKENS = 200  # Max tokens for theme extraction in analysis.py
 TAG_TEMPERATURE = 0.5
 TAG_MAX_TOKENS = 100
 
-# Tag validation
+# Tag validation (used by generate_semantic_tags in llm_analysis.py)
 MIN_TAG_LENGTH = 3
 MAX_TAG_LENGTH = 15
-MIN_THEME_OCCURRENCES = 2
 
 # Context lookback
 PAST_ENTRIES_LOOKBACK_DAYS = 90

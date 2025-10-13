@@ -18,24 +18,18 @@ class TestBrainCLI:
         assert result.exit_code == 0
         assert "brain" in result.stdout.lower()
         assert "diary" in result.stdout.lower()
-        assert "daemon" in result.stdout.lower()
         assert "notes" in result.stdout.lower()
 
     def test_diary_subcommand_help(self):
         """Test brain diary --help command."""
         result = runner.invoke(brain_app, ["diary", "--help"])
         assert result.exit_code == 0
-        assert "create" in result.stdout.lower()
-        assert "link" in result.stdout.lower()
-        assert "analyze" in result.stdout.lower()
-
-    def test_daemon_subcommand_help(self):
-        """Test brain daemon --help command."""
-        result = runner.invoke(brain_app, ["daemon", "--help"])
-        assert result.exit_code == 0
-        assert "start" in result.stdout.lower()
-        assert "stop" in result.stdout.lower()
-        assert "status" in result.stdout.lower()
+        # Verify diary subcommands exist
+        assert 'create' in result.stdout
+        assert 'plan' in result.stdout
+        assert 'link' in result.stdout
+        assert 'report' in result.stdout
+        assert 'patterns' in result.stdout
 
     def test_notes_subcommand_help(self):
         """Test brain notes --help command."""
@@ -55,8 +49,7 @@ class TestDiaryCommands:
         """Test diary list command."""
         # Setup mocks
         mock_config.return_value = Mock(
-            diary_path=mock_env["diary_path"],
-            llm_provider="ollama"
+            diary_path=mock_env["diary_path"]
         )
         mock_manager.return_value.list_entries.return_value = []
 
@@ -68,17 +61,66 @@ class TestDiaryCommands:
     @patch('brain_cli.diary_commands.get_config')
     @patch('brain_cli.diary_commands.get_llm_client')
     @patch('brain_cli.diary_commands.EntryManager')
-    def test_diary_themes_command(self, mock_manager, mock_llm, mock_config, mock_env):
-        """Test diary themes command."""
+    def test_diary_patterns_command(self, mock_manager, mock_llm, mock_config, mock_env):
+        """Test diary patterns command."""
         mock_config.return_value = Mock(
-            diary_path=mock_env["diary_path"],
-            llm_provider="ollama"
+            diary_path=mock_env["diary_path"]
         )
         mock_manager.return_value.list_entries.return_value = []
 
-        result = runner.invoke(brain_app, ["diary", "themes", "7"])
+        result = runner.invoke(brain_app, ["diary", "patterns", "7"])
 
         assert "No entries found" in result.stdout or result.exit_code == 0
+
+    @patch('brain_cli.diary_commands.get_config')
+    @patch('brain_cli.diary_commands.get_llm_client')
+    @patch('brain_cli.diary_commands.EntryManager')
+    @patch('brain_cli.diary_commands.generate_planning_prompts')
+    def test_diary_plan_command(self, mock_gen_prompts, mock_manager, mock_llm, mock_config, mock_env):
+        """Test diary plan command."""
+        # Setup mocks
+        mock_config.return_value = Mock(
+            diary_path=mock_env["diary_path"]
+        )
+        mock_llm_instance = Mock()
+        mock_llm_instance.check_connection_sync.return_value = True
+        mock_llm.return_value = mock_llm_instance
+
+        mock_manager_instance = Mock()
+        mock_manager_instance.entry_exists.return_value = False
+        mock_manager_instance.read_entry.return_value = None
+        mock_manager_instance.create_plan_template.return_value = Mock(
+            filename="2025-10-12-plan.md",
+            date=Mock(isoformat=lambda: "2025-10-12")
+        )
+        mock_manager.return_value = mock_manager_instance
+
+        mock_gen_prompts.return_value = [
+            "What are your priorities?",
+            "What needs preparation?",
+            "What unfinished items?"
+        ]
+
+        result = runner.invoke(brain_app, ["diary", "plan", "2025-10-12"])
+
+        assert result.exit_code == 0
+        assert "Created plan entry" in result.stdout or "2025-10-12-plan.md" in result.stdout
+
+    @patch('brain_cli.diary_commands.get_config')
+    @patch('brain_cli.diary_commands.EntryManager')
+    def test_diary_plan_already_exists(self, mock_manager, mock_config, mock_env):
+        """Test diary plan command when entry already exists."""
+        mock_config.return_value = Mock(
+            diary_path=mock_env["diary_path"]
+        )
+
+        mock_manager_instance = Mock()
+        mock_manager_instance.entry_exists.return_value = True
+        mock_manager.return_value = mock_manager_instance
+
+        result = runner.invoke(brain_app, ["diary", "plan", "2025-10-12"])
+
+        assert "already exists" in result.stdout.lower()
 
 
 class TestNotesCommands:
@@ -87,22 +129,20 @@ class TestNotesCommands:
     @patch('brain_cli.notes_commands.get_azure_search_client')
     def test_notes_status_not_configured(self, mock_client):
         """Test notes status when not configured."""
-        mock_client.return_value = None
+        mock_client.side_effect = ValueError("AZURE_SEARCH_ENDPOINT must be set in .env")
 
         result = runner.invoke(brain_app, ["notes", "status"])
 
         assert result.exit_code == 1
-        assert "not configured" in result.stdout.lower()
 
     @patch('brain_cli.notes_commands.get_azure_search_client')
     def test_notes_search_not_configured(self, mock_client):
         """Test notes search when not configured."""
-        mock_client.return_value = None
+        mock_client.side_effect = ValueError("AZURE_SEARCH_ENDPOINT must be set in .env")
 
         result = runner.invoke(brain_app, ["notes", "search", "test"])
 
         assert result.exit_code == 1
-        assert "not configured" in result.stdout.lower()
 
     @patch('brain_cli.notes_commands.get_azure_search_client')
     def test_notes_status_configured(self, mock_client):
@@ -119,14 +159,4 @@ class TestNotesCommands:
         assert "successful" in result.stdout.lower()
 
 
-class TestDaemonCommands:
-    """Tests for daemon commands."""
 
-    @patch('brain_cli.daemon_commands.PIDFILE')
-    def test_daemon_status_not_running(self, mock_pidfile):
-        """Test daemon status when not running."""
-        mock_pidfile.exists.return_value = False
-
-        result = runner.invoke(brain_app, ["daemon", "status"])
-
-        assert "not running" in result.stdout.lower()

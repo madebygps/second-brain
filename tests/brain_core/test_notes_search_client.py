@@ -1,12 +1,12 @@
-"""Tests for azure_search_client module."""
+"""Tests for notes_search_client module."""
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from brain_core.azure_search_client import (
+from brain_core.notes_search_client import (
     AzureSearchNotesClient,
-    SearchResult,
-    get_azure_search_client
+    SearchResult
 )
+from brain_core.config import get_azure_search_client, Config
 
 
 class TestSearchResult:
@@ -39,7 +39,7 @@ class TestAzureSearchNotesClient:
     @pytest.fixture
     def mock_search_client(self):
         """Mock Azure SearchClient."""
-        with patch('brain_core.azure_search_client.SearchClient') as mock:
+        with patch('brain_core.notes_search_client.SearchClient') as mock:
             yield mock
 
     @pytest.fixture
@@ -121,28 +121,44 @@ class TestAzureSearchNotesClient:
 class TestGetAzureSearchClient:
     """Tests for get_azure_search_client factory function."""
 
-    def test_with_valid_env(self, monkeypatch):
+    def test_with_valid_env(self, monkeypatch, tmp_path):
         """Test creating client with valid environment variables."""
+        monkeypatch.setenv("DIARY_PATH", str(tmp_path / "diary"))
+        monkeypatch.setenv("PLANNER_PATH", str(tmp_path / "planner"))
         monkeypatch.setenv("AZURE_SEARCH_ENDPOINT", "https://test.search.windows.net")
         monkeypatch.setenv("AZURE_SEARCH_API_KEY", "test-key")
         monkeypatch.setenv("AZURE_SEARCH_INDEX_NAME", "test-index")
 
-        with patch('brain_core.azure_search_client.AzureSearchNotesClient') as mock_client:
-            get_azure_search_client()
+        (tmp_path / "diary").mkdir()
+        (tmp_path / "planner").mkdir()
+
+        with patch('brain_core.notes_search_client.AzureSearchNotesClient') as mock_client:
+            mock_client.return_value = Mock()
+            config = Config(validate_paths=True)
+            client = get_azure_search_client(config)
+            
             mock_client.assert_called_once_with(
                 endpoint="https://test.search.windows.net",
                 api_key="test-key",
                 index_name="test-index"
             )
 
-    def test_with_default_index_name(self, monkeypatch):
+    def test_with_default_index_name(self, monkeypatch, tmp_path):
         """Test default index name."""
+        monkeypatch.setenv("DIARY_PATH", str(tmp_path / "diary"))
+        monkeypatch.setenv("PLANNER_PATH", str(tmp_path / "planner"))
         monkeypatch.setenv("AZURE_SEARCH_ENDPOINT", "https://test.search.windows.net")
         monkeypatch.setenv("AZURE_SEARCH_API_KEY", "test-key")
         monkeypatch.delenv("AZURE_SEARCH_INDEX_NAME", raising=False)
 
-        with patch('brain_core.azure_search_client.AzureSearchNotesClient') as mock_client:
-            get_azure_search_client()
+        (tmp_path / "diary").mkdir()
+        (tmp_path / "planner").mkdir()
+
+        with patch('brain_core.notes_search_client.AzureSearchNotesClient') as mock_client:
+            mock_client.return_value = Mock()
+            config = Config(validate_paths=True)
+            client = get_azure_search_client(config)
+            
             mock_client.assert_called_once_with(
                 endpoint="https://test.search.windows.net",
                 api_key="test-key",

@@ -9,16 +9,19 @@ from .constants import MIN_SUBSTANTIAL_CONTENT_CHARS
 class DiaryEntry:
     """Represents a single diary entry."""
 
-    def __init__(self, entry_date: date, content: str = ""):
+    def __init__(self, entry_date: date, content: str = "", entry_type: str = "reflection"):
         self.date = entry_date
         self.content = content
+        self.entry_type = entry_type  # "reflection" or "plan"
         self._reflection_prompts: Optional[str] = None
         self._brain_dump: Optional[str] = None
         self._memory_links: Optional[str] = None
 
     @property
     def filename(self) -> str:
-        """Get filename for this entry (YYYY-MM-DD.md)."""
+        """Get filename for this entry (YYYY-MM-DD.md or YYYY-MM-DD-plan.md)."""
+        if self.entry_type == "plan":
+            return f"{self.date.isoformat()}-plan.md"
         return f"{self.date.isoformat()}.md"
 
     def parse_sections(self) -> None:
@@ -77,27 +80,30 @@ class EntryManager:
     def __init__(self, diary_path: Path):
         self.diary_path = diary_path
 
-    def get_entry_path(self, entry_date: date) -> Path:
+    def get_entry_path(self, entry_date: date, entry_type: str = "reflection") -> Path:
         """Get full path for a diary entry."""
-        filename = f"{entry_date.isoformat()}.md"
+        if entry_type == "plan":
+            filename = f"{entry_date.isoformat()}-plan.md"
+        else:
+            filename = f"{entry_date.isoformat()}.md"
         return self.diary_path / filename
 
-    def entry_exists(self, entry_date: date) -> bool:
-        """Check if entry exists for given date."""
-        return self.get_entry_path(entry_date).exists()
+    def entry_exists(self, entry_date: date, entry_type: str = "reflection") -> bool:
+        """Check if entry exists for given date and type."""
+        return self.get_entry_path(entry_date, entry_type).exists()
 
-    def read_entry(self, entry_date: date) -> Optional[DiaryEntry]:
-        """Read diary entry for given date."""
-        path = self.get_entry_path(entry_date)
+    def read_entry(self, entry_date: date, entry_type: str = "reflection") -> Optional[DiaryEntry]:
+        """Read diary entry for given date and type."""
+        path = self.get_entry_path(entry_date, entry_type)
         if not path.exists():
             return None
 
         content = path.read_text(encoding="utf-8")
-        return DiaryEntry(entry_date, content)
+        return DiaryEntry(entry_date, content, entry_type)
 
     def write_entry(self, entry: DiaryEntry) -> None:
         """Write diary entry to file."""
-        path = self.get_entry_path(entry.date)
+        path = self.get_entry_path(entry.date, entry.entry_type)
         path.write_text(entry.content, encoding="utf-8")
 
     def create_entry_template(
@@ -122,6 +128,41 @@ class EntryManager:
 
         content = "\n".join(sections)
         return DiaryEntry(entry_date, content)
+
+    def create_plan_template(
+        self,
+        entry_date: date,
+        prompts: List[str],
+        pending_todos: List[str] = None
+    ) -> DiaryEntry:
+        """Create a new plan entry with template structure."""
+        sections = []
+
+        # Daily Focus section
+        sections.append("## Daily Focus")
+        for i, prompt in enumerate(prompts, 1):
+            sections.append(f"**{i}. {prompt}**")
+            sections.append("")
+        sections.append("---")
+        sections.append("")
+
+        # Action Items section
+        sections.append("## Action Items")
+        if pending_todos:
+            for todo in pending_todos:
+                sections.append(f"- [ ] {todo}")
+        else:
+            sections.append("- [ ] ")
+        sections.append("")
+        sections.append("---")
+        sections.append("")
+
+        # Brain Dump section
+        sections.append("## Brain Dump")
+        sections.append("")
+
+        content = "\n".join(sections)
+        return DiaryEntry(entry_date, content, entry_type="plan")
 
     def list_entries(self, days: int = 30) -> List[DiaryEntry]:
         """List recent entries (up to N days back)."""
@@ -190,15 +231,14 @@ class EntryManager:
                     confidence = meta.get("confidence", "")
                     reason = meta.get("reason", "")
 
-                    # Format: [[date]] (confidence) - reason
                     link_str = f"- [[{link}]]"
                     if confidence:
-                        confidence_emoji = {
-                            "high": "🔗",
-                            "medium": "→",
+                        confidence_marker = {
+                            "high": "**",
+                            "medium": "*",
                             "low": "~"
-                        }.get(confidence, "→")
-                        link_str += f" {confidence_emoji}"
+                        }.get(confidence, "*")
+                        link_str += f" {confidence_marker}"
                     if reason:
                         link_str += f" *{reason}*"
 
@@ -229,3 +269,34 @@ class EntryManager:
 
         entry.content = new_content
         return entry
+
+
+def extract_todos(entry: DiaryEntry) -> List[str]:
+    """Extract action items/todos from entry content using regex patterns.
+    
+    Args:
+        entry: Diary entry to extract todos from
+        
+    Returns:
+        List of todo strings found in the entry
+    """
+    todos = []
+
+    # Look for common todo patterns
+    patterns = [
+        r'(?:^|\n)[-*•]\s*(?:TODO|To do|Action):\s*(.+?)(?:\n|$)',  # - TODO: item
+        r'(?:^|\n)[-*•]\s*\[ \]\s*(.+?)(?:\n|$)',  # - [ ] item (checkbox)
+        r'(?:^|\n)(?:TODO|To do|Action):\s*(.+?)(?:\n|$)',  # TODO: item
+        r'(?:^|\n)(?:I need to|I should|I must|I will)\s+(.+?)(?:\.|$)',  # Natural language
+    ]
+
+    content = entry.content
+
+    for pattern in patterns:
+        matches = re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE)
+        for match in matches:
+            todo = match.group(1).strip()
+            if todo and len(todo) > 3:  # Filter out very short matches
+                todos.append(todo)
+
+    return todos

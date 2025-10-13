@@ -1,53 +1,149 @@
 """LLM-powered analysis for semantic backlinks and tags."""
-from typing import List, Tuple, Dict, Optional
+from typing import List, Dict, Literal, cast
+from dataclasses import dataclass
 import json
+import logging
+import time
 from .entry_manager import DiaryEntry
 from .llm_client import LLMClient
 from .constants import (
     MAX_SEMANTIC_LINK_CANDIDATES,
     MAX_SEMANTIC_LINKS,
     MAX_TOPIC_TAGS,
+    MAX_ENTRIES_FOR_TAG_CONTEXT,
     ENTRY_PREVIEW_LENGTH,
     TARGET_PREVIEW_LENGTH,
     SEMANTIC_TEMPERATURE,
-    SEMANTIC_MAX_TOKENS,
     TAG_TEMPERATURE,
     TAG_MAX_TOKENS,
     MIN_TAG_LENGTH,
-    MAX_TAG_LENGTH
+    MAX_TAG_LENGTH,
+    MIN_CONTENT_FOR_ENTITY_EXTRACTION,
+    ENTITY_EXTRACTION_MAX_TOKENS,
+    SEMANTIC_BACKLINKS_MAX_TOKENS
 )
 
+logger = logging.getLogger(__name__)
 
+# Type alias for confidence levels
+ConfidenceLevel = Literal["high", "medium", "low"]
+
+# Empty entity dict for consistent returns
+EMPTY_ENTITIES: Dict[str, List[str]] = {
+    "people": [],
+    "places": [],
+    "projects": [],
+    "themes": []
+}
+
+
+@dataclass
 class SemanticLink:
     """Represents a semantic link with metadata."""
-    def __init__(self, target_date: str, confidence: str, reason: str, entities: List[str]):
-        self.target_date = target_date
-        self.confidence = confidence  # "high", "medium", "low"
-        self.reason = reason
-        self.entities = entities  # Related entities/themes
+    target_date: str
+    confidence: ConfidenceLevel
+    reason: str
+    entities: List[str]
+
+
+def _clean_json_response(response: str) -> str:
+    """Remove markdown code blocks from LLM JSON responses.
+    
+    Args:
+        response: Raw LLM response that may contain markdown formatting
+        
+    Returns:
+        Cleaned response string ready for JSON parsing
+    """
+    clean = response.strip()
+    if clean.startswith("```"):
+        lines = clean.split("\n")
+        clean = "\n".join(lines[1:-1] if len(lines) > 2 else lines)
+    return clean
+
+
+def _truncate_text(text: str, max_length: int) -> str:
+    """Truncate text to max_length if needed.
+    
+    Args:
+        text: Text to truncate
+        max_length: Maximum length in characters
+        
+    Returns:
+        Original text if shorter than max_length, otherwise truncated text
+    """
+    return text[:max_length] if len(text) > max_length else text
+
+
+def _validate_entities(entities: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    """Validate and clean entity extraction results.
+    
+    Args:
+        entities: Raw entity dictionary from LLM
+        
+    Returns:
+        Validated entity dictionary with required keys and clean values
+    """
+    required_keys = {"people", "places", "projects", "themes"}
+    validated = {}
+    
+    for key in required_keys:
+        if key not in entities or not isinstance(entities[key], list):
+            validated[key] = []
+        else:
+            # Filter out empty strings and ensure all are strings
+            validated[key] = [
+                str(item).strip() 
+                for item in entities[key] 
+                if item and str(item).strip()
+            ]
+    
+    return validated
+
+
+def _validate_confidence(confidence: str) -> ConfidenceLevel:
+    """Validate and normalize confidence level.
+    
+    Args:
+        confidence: Raw confidence string from LLM
+        
+    Returns:
+        Valid confidence level, defaulting to 'medium' if invalid
+    """
+    normalized = confidence.lower().strip()
+    if normalized in {"high", "medium", "low"}:
+        return cast(ConfidenceLevel, normalized)
+    return "medium"
 
 
 def extract_entities(
     entry: DiaryEntry,
     llm_client: LLMClient
 ) -> Dict[str, List[str]]:
-    """Extract people, places, projects, and themes from an entry."""
-    if not entry.brain_dump or len(entry.brain_dump) < 50:
-        return {"people": [], "places": [], "projects": [], "themes": []}
+    """Extract people, places, projects, and themes from an entry.
+    
+    Args:
+        entry: Diary entry to analyze
+        llm_client: LLM client for generation
+        
+    Returns:
+        Dictionary with keys: people, places, projects, themes (all lists of strings)
+    """
+    if not entry.brain_dump or len(entry.brain_dump) < MIN_CONTENT_FOR_ENTITY_EXTRACTION:
+        logger.debug(f"Entry {entry.date}: Insufficient content for entity extraction")
+        return EMPTY_ENTITIES.copy()
 
-    preview = entry.brain_dump[:ENTRY_PREVIEW_LENGTH]
+    preview = _truncate_text(entry.brain_dump, ENTRY_PREVIEW_LENGTH)
 
-    system_prompt = """You are extracting structured entities from diary entries. Identify:
-- People: Names or roles of people mentioned
-- Places: Locations, venues, cities
-- Projects: Work projects, personal initiatives, ongoing activities
-- Themes: Abstract concepts, emotions, or situations (e.g., "career growth", "family tension", "creativity")
+    system_prompt = """Extract key entities from diary entries. Identify:
+- people: Names or roles (e.g., "Sarah", "manager")
+- places: Locations (e.g., "office", "Portland")
+- projects: Work/personal initiatives (e.g., "website redesign")
+- themes: Emotions/concepts (e.g., "stress", "growth")
 
-Return ONLY a valid JSON object with these four keys, each containing an array of strings.
-Keep entries concise (1-3 words each). Return empty arrays if none found.
+Return ONLY valid JSON with these 4 keys as string arrays. Keep entries 1-3 words. Empty arrays if none found.
 
-Example:
-{"people": ["Sarah", "manager"], "places": ["office", "coffee shop"], "projects": ["website redesign"], "themes": ["stress", "motivation"]}"""
+Example: {"people": ["Sarah"], "places": ["office"], "projects": ["website"], "themes": ["stress"]}"""
 
     user_prompt = f"""Extract entities from this diary entry:
 
@@ -56,105 +152,117 @@ Example:
 Return JSON only (no explanations):"""
 
     try:
+        start_time = time.time()
         response = llm_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
             temperature=0.2,
-            max_tokens=200
+            max_tokens=ENTITY_EXTRACTION_MAX_TOKENS
         )
+        elapsed = time.time() - start_time
 
-        # Try to parse JSON response
-        # Remove markdown code blocks if present
-        clean_response = response.strip()
-        if clean_response.startswith("```"):
-            lines = clean_response.split("\n")
-            clean_response = "\n".join(lines[1:-1] if len(lines) > 2 else lines)
-
+        # Clean and parse JSON response
+        clean_response = _clean_json_response(response)
         entities = json.loads(clean_response)
 
-        # Validate structure
-        required_keys = {"people", "places", "projects", "themes"}
-        if not all(key in entities for key in required_keys):
-            return {"people": [], "places": [], "projects": [], "themes": []}
+        # Validate structure and types
+        if not isinstance(entities, dict):
+            logger.warning(f"Entry {entry.date}: Invalid entity extraction response type")
+            return EMPTY_ENTITIES.copy()
+        
+        validated_entities = _validate_entities(entities)
+        
+        logger.debug(
+            f"Entry {entry.date}: Extracted entities in {elapsed:.2f}s - "
+            f"people: {len(validated_entities['people'])}, "
+            f"places: {len(validated_entities['places'])}, "
+            f"projects: {len(validated_entities['projects'])}, "
+            f"themes: {len(validated_entities['themes'])}"
+        )
+        
+        return validated_entities
 
-        return entities
+    except json.JSONDecodeError as e:
+        logger.warning(f"Entry {entry.date}: JSON decode error in entity extraction - {e}")
+        return EMPTY_ENTITIES.copy()
+    except RuntimeError as e:
+        logger.warning(f"Entry {entry.date}: LLM error in entity extraction - {e}")
+        return EMPTY_ENTITIES.copy()
 
-    except (json.JSONDecodeError, RuntimeError) as e:
-        print(f"Warning: Entity extraction failed: {e}")
-        return {"people": [], "places": [], "projects": [], "themes": []}
 
-
-def generate_semantic_backlinks_enhanced(
+def generate_semantic_backlinks(
     target_entry: DiaryEntry,
     candidate_entries: List[DiaryEntry],
     llm_client: LLMClient,
     max_links: int = MAX_SEMANTIC_LINKS
 ) -> List[SemanticLink]:
-    """Use LLM to find semantically related entries with confidence scores and bidirectional validation."""
+    """Use LLM to find semantically related entries with confidence scores and entity extraction.
+    
+    Args:
+        target_entry: The entry to find connections for
+        candidate_entries: Potential entries to link to
+        llm_client: LLM client for generation
+        max_links: Maximum number of links to return (must be positive)
+        
+    Returns:
+        List of SemanticLink objects with metadata
+        
+    Raises:
+        ValueError: If max_links is not positive
+    """
+    if max_links <= 0:
+        raise ValueError(f"max_links must be positive, got {max_links}")
+    
     if not candidate_entries:
+        logger.debug(f"Entry {target_entry.date}: No candidate entries for backlink generation")
         return []
 
     # Step 1: Extract entities from target entry
     target_entities = extract_entities(target_entry, llm_client)
 
-    # Step 2: Build enriched context with entity information
+    # Step 2: Build context with entity information
     candidate_context = []
-    candidate_entities_map = {}
 
     for entry in candidate_entries[:MAX_SEMANTIC_LINK_CANDIDATES]:
         if entry.date == target_entry.date:
             continue
 
-        # Extract entities for each candidate
-        entities = extract_entities(entry, llm_client)
-        candidate_entities_map[entry.date.isoformat()] = entities
-
-        preview = entry.brain_dump[:ENTRY_PREVIEW_LENGTH] if len(entry.brain_dump) > ENTRY_PREVIEW_LENGTH else entry.brain_dump
+        preview = _truncate_text(entry.brain_dump, ENTRY_PREVIEW_LENGTH)
         if preview:
-            entity_summary = []
-            if entities["people"]:
-                entity_summary.append(f"People: {', '.join(entities['people'][:3])}")
-            if entities["themes"]:
-                entity_summary.append(f"Themes: {', '.join(entities['themes'][:3])}")
-
-            entity_str = f" [{'; '.join(entity_summary)}]" if entity_summary else ""
-            candidate_context.append(f"[[{entry.date.isoformat()}]]{entity_str}: {preview}")
+            candidate_context.append(f"[[{entry.date.isoformat()}]]: {preview}")
 
     if not candidate_context:
+        logger.debug(f"Entry {target_entry.date}: No valid candidate context for backlinks")
         return []
 
     candidates_text = "\n\n".join(candidate_context)
-    target_preview = target_entry.brain_dump[:TARGET_PREVIEW_LENGTH] if len(target_entry.brain_dump) > TARGET_PREVIEW_LENGTH else target_entry.brain_dump
+    target_preview = _truncate_text(target_entry.brain_dump, TARGET_PREVIEW_LENGTH)
 
     target_entity_summary = []
     if target_entities["people"]:
-        target_entity_summary.append(f"People: {', '.join(target_entities['people'][:3])}")
+        people_list = target_entities["people"][:3]
+        target_entity_summary.append(f"People: {', '.join(people_list)}")
     if target_entities["themes"]:
-        target_entity_summary.append(f"Themes: {', '.join(target_entities['themes'][:3])}")
+        themes_list = target_entities["themes"][:3]
+        target_entity_summary.append(f"Themes: {', '.join(themes_list)}")
     target_entity_str = f"\n[{'; '.join(target_entity_summary)}]" if target_entity_summary else ""
 
-    system_prompt = f"""You are analyzing diary entries to find semantic connections with high precision.
+    system_prompt = f"""Analyze diary entries to find semantic connections. Consider:
+- Shared people, places, or projects
+- Thematic/emotional patterns
+- Cause-effect relationships
+- Continuations of ideas
 
-Consider:
-- Shared people, places, or projects (STRONG indicator)
-- Thematic connections and emotional patterns
-- Cause and effect relationships
-- Follow-ups or continuations of ideas
-- Similar situations or contexts
+For each related entry provide:
+1. date: YYYY-MM-DD format
+2. confidence: "high" (clear), "medium" (probable), "low" (weak)
+3. reason: Brief explanation (5-10 words)
+4. entities: Connecting elements from target entry's context
 
-For each related entry, provide:
-1. Date (YYYY-MM-DD format)
-2. Confidence level: "high" (clear connection), "medium" (probable connection), or "low" (weak connection)
-3. Brief reason (5-10 words explaining the connection)
-4. Related entities (people/themes that connect them)
+Return ONLY valid JSON array (up to {max_links} entries):
+[{{"date": "YYYY-MM-DD", "confidence": "high", "reason": "discusses same project deadline", "entities": ["work", "stress"]}}]
 
-Return ONLY valid JSON array format:
-[
-  {{"date": "YYYY-MM-DD", "confidence": "high", "reason": "both discuss project deadline stress", "entities": ["work project", "stress"]}},
-  {{"date": "YYYY-MM-DD", "confidence": "medium", "reason": "similar emotional tone", "entities": ["anxiety"]}}
-]
-
-Return up to {max_links} entries. If no strong connections exist, return empty array []."""
+Empty array [] if no connections."""
 
     user_prompt = f"""Target entry [[{target_entry.date.isoformat()}]]:{target_entity_str}
 {target_preview}
@@ -169,204 +277,58 @@ Candidate entries:
 Which candidates are semantically related? Return JSON array only (no explanations):"""
 
     try:
+        start_time = time.time()
         response = llm_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
             temperature=SEMANTIC_TEMPERATURE,
-            max_tokens=400
+            max_tokens=SEMANTIC_BACKLINKS_MAX_TOKENS
         )
+        elapsed = time.time() - start_time
 
         # Parse JSON response
-        clean_response = response.strip()
-        if clean_response.startswith("```"):
-            lines = clean_response.split("\n")
-            clean_response = "\n".join(lines[1:-1] if len(lines) > 2 else lines)
-
+        clean_response = _clean_json_response(response)
         links_data = json.loads(clean_response)
 
         if not isinstance(links_data, list):
+            logger.warning(f"Entry {target_entry.date}: Backlink response not a list")
             return []
 
-        # Convert to SemanticLink objects
+        # Convert to SemanticLink objects with validation
         semantic_links = []
         for link in links_data[:max_links]:
-            if isinstance(link, dict) and "date" in link:
-                semantic_links.append(SemanticLink(
-                    target_date=link.get("date", ""),
-                    confidence=link.get("confidence", "medium"),
-                    reason=link.get("reason", ""),
-                    entities=link.get("entities", [])
-                ))
-
-        # Step 3: Bidirectional validation for high-confidence links
-        validated_links = []
-        for link in semantic_links:
-            if link.confidence == "high":
-                # Perform reverse check: would B link back to A?
-                is_bidirectional = validate_bidirectional_link(
-                    target_entry, link, candidate_entries, llm_client
-                )
-                if is_bidirectional:
-                    validated_links.append(link)
-                else:
-                    # Downgrade confidence if not bidirectional
-                    link.confidence = "medium"
-                    validated_links.append(link)
+            if not isinstance(link, dict) or "date" not in link:
+                continue
+                
+            # Validate and clean entities
+            entities = link.get("entities", [])
+            if not isinstance(entities, list):
+                entities = []
             else:
-                # Medium/low confidence links don't require bidirectional check
-                validated_links.append(link)
+                entities = [e for e in entities if e]
+            
+            # Validate confidence level
+            confidence = _validate_confidence(link.get("confidence", "medium"))
+            
+            semantic_links.append(SemanticLink(
+                target_date=link.get("date", ""),
+                confidence=confidence,
+                reason=link.get("reason", ""),
+                entities=entities
+            ))
 
-        return validated_links
-
-    except (json.JSONDecodeError, RuntimeError) as e:
-        print(f"Warning: Enhanced LLM backlink generation failed: {e}")
-        return []
-
-
-def validate_bidirectional_link(
-    source_entry: DiaryEntry,
-    link: SemanticLink,
-    all_entries: List[DiaryEntry],
-    llm_client: LLMClient
-) -> bool:
-    """Validate that the link makes sense in both directions (A→B and B→A)."""
-    # Find the target entry
-    target_entry = None
-    for entry in all_entries:
-        if entry.date.isoformat() == link.target_date:
-            target_entry = entry
-            break
-
-    if not target_entry:
-        return False
-
-    # Quick bidirectional check
-    source_preview = source_entry.brain_dump[:300]
-    target_preview = target_entry.brain_dump[:300]
-
-    system_prompt = """You are validating a proposed connection between two diary entries.
-Given Entry A and Entry B, determine if they are genuinely related bidirectionally.
-
-Answer with ONLY "yes" or "no" (no explanations)."""
-
-    user_prompt = f"""Entry A [[{source_entry.date.isoformat()}]]:
-{source_preview}
-
-Entry B [[{target_entry.date.isoformat()}]]:
-{target_preview}
-
-Proposed connection: "{link.reason}"
-Shared elements: {', '.join(link.entities) if link.entities else 'none'}
-
-Is this a valid bidirectional connection (would both entries reasonably link to each other)? Answer yes or no:"""
-
-    try:
-        response = llm_client.generate_sync(
-            prompt=user_prompt,
-            system=system_prompt,
-            temperature=0.1,
-            max_tokens=10
+        logger.info(
+            f"Entry {target_entry.date}: Generated {len(semantic_links)} semantic backlinks "
+            f"in {elapsed:.2f}s from {len(candidate_context)} candidates"
         )
+        
+        return semantic_links
 
-        answer = response.strip().lower()
-        return "yes" in answer
-
-    except RuntimeError:
-        # If validation fails, err on the side of caution
-        return True
-
-
-def generate_semantic_backlinks(
-    target_entry: DiaryEntry,
-    candidate_entries: List[DiaryEntry],
-    llm_client: LLMClient,
-    max_links: int = MAX_SEMANTIC_LINKS,
-    use_enhanced: bool = True
-) -> List[str]:
-    """Use LLM to find semantically related entries.
-
-    Args:
-        use_enhanced: If True, uses enhanced mode with entity extraction,
-                     confidence scores, and bidirectional validation.
-                     If False, uses legacy simple mode.
-    """
-    if use_enhanced:
-        # Use enhanced version with metadata
-        enhanced_links = generate_semantic_backlinks_enhanced(
-            target_entry, candidate_entries, llm_client, max_links
-        )
-        # Return just the dates for backward compatibility
-        return [link.target_date for link in enhanced_links]
-
-    # Legacy simple mode
-    if not candidate_entries:
+    except json.JSONDecodeError as e:
+        logger.warning(f"Entry {target_entry.date}: JSON decode error in backlink generation - {e}")
         return []
-
-    # Build context with candidates
-    candidate_context = []
-    for entry in candidate_entries[:MAX_SEMANTIC_LINK_CANDIDATES]:
-        if entry.date == target_entry.date:
-            continue
-        preview = entry.brain_dump[:ENTRY_PREVIEW_LENGTH] if len(entry.brain_dump) > ENTRY_PREVIEW_LENGTH else entry.brain_dump
-        if preview:
-            candidate_context.append(f"[[{entry.date.isoformat()}]]: {preview}")
-
-    if not candidate_context:
-        return []
-
-    candidates_text = "\n\n".join(candidate_context)
-    target_preview = target_entry.brain_dump[:TARGET_PREVIEW_LENGTH] if len(target_entry.brain_dump) > TARGET_PREVIEW_LENGTH else target_entry.brain_dump
-
-    system_prompt = f"""You are analyzing diary entries to find semantic connections. Given a target entry and a list of candidate entries, identify which candidates are most related to the target.
-
-Consider:
-- Thematic connections (similar topics, emotions, situations)
-- Cause and effect relationships
-- Follow-ups or continuations of ideas
-- Related people, places, or events
-
-Return ONLY the dates of related entries (up to {max_links}), one per line, in the format YYYY-MM-DD.
-If no entries are related, return an empty response.
-Do not include explanations or additional text."""
-
-    user_prompt = f"""Target entry [[{target_entry.date.isoformat()}]]:
-{target_preview}
-
----
-
-Candidate entries:
-{candidates_text}
-
----
-
-Which candidate entries are semantically related to the target? Return only the dates (YYYY-MM-DD), one per line, up to {max_links} entries."""
-
-    try:
-        response = llm_client.generate_sync(
-            prompt=user_prompt,
-            system=system_prompt,
-            temperature=SEMANTIC_TEMPERATURE,
-            max_tokens=SEMANTIC_MAX_TOKENS
-        )
-
-        # Parse dates from response
-        dates = []
-        for line in response.split("\n"):
-            line = line.strip()
-            # Match YYYY-MM-DD format
-            if len(line) == 10 and line[4] == '-' and line[7] == '-':
-                try:
-                    # Validate it's a real date
-                    parts = line.split('-')
-                    if len(parts) == 3 and all(p.isdigit() for p in parts):
-                        dates.append(line)
-                except:
-                    continue
-
-        return dates[:max_links]
-
     except RuntimeError as e:
-        print(f"Warning: LLM backlink generation failed: {e}")
+        logger.warning(f"Entry {target_entry.date}: LLM error in backlink generation - {e}")
         return []
 
 
@@ -375,18 +337,35 @@ def generate_semantic_tags(
     llm_client: LLMClient,
     max_tags: int = MAX_TOPIC_TAGS
 ) -> List[str]:
-    """Use LLM to generate semantic topic tags."""
+    """Use LLM to generate semantic topic tags.
+    
+    Args:
+        entries: List of diary entries to analyze
+        llm_client: LLM client for generation
+        max_tags: Maximum number of tags to return (must be positive)
+        
+    Returns:
+        List of lowercase tag strings (without # prefix)
+        
+    Raises:
+        ValueError: If max_tags is not positive
+    """
+    if max_tags <= 0:
+        raise ValueError(f"max_tags must be positive, got {max_tags}")
+    
     if not entries:
+        logger.debug("No entries provided for tag generation")
         return []
 
     # Build context from entries
     context_parts = []
-    for entry in entries[:MAX_TOPIC_TAGS]:
-        preview = entry.brain_dump[:ENTRY_PREVIEW_LENGTH] if len(entry.brain_dump) > ENTRY_PREVIEW_LENGTH else entry.brain_dump
+    for entry in entries[:MAX_ENTRIES_FOR_TAG_CONTEXT]:
+        preview = _truncate_text(entry.brain_dump, ENTRY_PREVIEW_LENGTH)
         if preview:
             context_parts.append(preview)
 
     if not context_parts:
+        logger.debug("No valid entry content for tag generation")
         return []
 
     context = "\n\n".join(context_parts)
@@ -423,30 +402,34 @@ What are the {max_tags} most meaningful thematic tags that capture the emotional
 Return only the tags (one per line, with # prefix), focusing on themes over topics."""
 
     try:
+        start_time = time.time()
         response = llm_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
             temperature=TAG_TEMPERATURE,
             max_tokens=TAG_MAX_TOKENS
         )
+        elapsed = time.time() - start_time
 
-        # Parse tags from response
+        # Parse tags from response (simplified logic)
         tags = []
         for line in response.split("\n"):
-            line = line.strip()
-            if line.startswith("#"):
-                tag = line[1:].strip().lower()
-                # Validate tag length
-                if MIN_TAG_LENGTH <= len(tag) <= MAX_TAG_LENGTH and tag:
-                    tags.append(tag)
-            elif line and not line.startswith("#") and len(line) <= MAX_TAG_LENGTH:
-                # Handle cases where LLM forgets the # prefix
-                tag = line.strip().lower()
-                if MIN_TAG_LENGTH <= len(tag) <= MAX_TAG_LENGTH:
-                    tags.append(tag)
+            # Remove # prefix if present and clean the tag
+            tag = line.strip().lstrip("#").lower()
+            
+            # Validate tag length and content
+            if MIN_TAG_LENGTH <= len(tag) <= MAX_TAG_LENGTH and tag:
+                tags.append(tag)
 
-        return tags[:max_tags]
+        result_tags = tags[:max_tags]
+        
+        logger.info(
+            f"Generated {len(result_tags)} semantic tags in {elapsed:.2f}s "
+            f"from {len(entries)} entries"
+        )
+        
+        return result_tags
 
     except RuntimeError as e:
-        print(f"Warning: LLM tag generation failed: {e}")
+        logger.warning(f"LLM tag generation failed for {len(entries)} entries - {e}")
         return []

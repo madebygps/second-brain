@@ -4,18 +4,58 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.markdown import Markdown
-from typing import Optional
 
-from brain_core.azure_search_client import get_azure_search_client
+from brain_core.config import get_azure_search_client
 
 app = typer.Typer(help="Search and manage book notes using Azure AI Search")
 console = Console()
+
+# Constants
+DEFAULT_TOP_RESULTS = 10
+PREVIEW_LENGTH = 80
+TABLE_COL_WIDTH_INDEX = 3
+TABLE_COL_WIDTH_CATEGORY = 12
+TABLE_COL_WIDTH_WORDS = 7
+TABLE_COL_WIDTH_SCORE = 7
+
+
+def check_search_connection(search_client) -> bool:
+    """Check Azure Search connection and display error if unavailable.
+    
+    Args:
+        search_client: Azure Search client instance to check
+        
+    Returns:
+        True if connection successful, False otherwise
+    """
+    if not search_client.check_connection():
+        console.print("[red]Error: Cannot connect to Azure Search service[/red]")
+        console.print(f"[dim]Endpoint: {search_client.endpoint}[/dim]")
+        console.print(f"[dim]Index: {search_client.index_name}[/dim]")
+        return False
+    return True
+
+
+def create_result_preview(content: str, max_length: int = PREVIEW_LENGTH) -> str:
+    """Create a preview string from content.
+    
+    Args:
+        content: Full content text
+        max_length: Maximum length of preview
+        
+    Returns:
+        Truncated preview string with ellipsis if needed
+    """
+    preview = content[:max_length].replace("\n", " ")
+    if len(content) > max_length:
+        preview += "..."
+    return preview
 
 
 @app.command()
 def search(
     query: str = typer.Argument(..., help="Search query (e.g., 'notes on discipline')"),
-    top: int = typer.Option(10, "--top", "-n", help="Maximum number of results to return"),
+    top: int = typer.Option(DEFAULT_TOP_RESULTS, "--top", "-n", help="Maximum number of results to return"),
     semantic: bool = typer.Option(False, "--semantic", "-s", help="Use semantic search (slower but more relevant)"),
     detailed: bool = typer.Option(False, "--detailed", "-d", help="Show full content of results")
 ):
@@ -31,19 +71,8 @@ def search(
         # Get Azure Search client
         search_client = get_azure_search_client()
 
-        if not search_client:
-            console.print("[red]Error: Azure Search is not configured[/red]")
-            console.print("\n[yellow]Please set the following environment variables in your .env file:[/yellow]")
-            console.print("  - AZURE_SEARCH_ENDPOINT")
-            console.print("  - AZURE_SEARCH_API_KEY")
-            console.print("  - AZURE_SEARCH_INDEX_NAME (optional, defaults to 'notes-index')")
-            raise typer.Exit(1)
-
         # Check connection
-        if not search_client.check_connection():
-            console.print("[red]Error: Cannot connect to Azure Search service[/red]")
-            console.print(f"[dim]Endpoint: {search_client.endpoint}[/dim]")
-            console.print(f"[dim]Index: {search_client.index_name}[/dim]")
+        if not check_search_connection(search_client):
             raise typer.Exit(1)
 
         # Perform search
@@ -85,18 +114,15 @@ def search(
         else:
             # Table view - compact overview
             table = Table(show_header=True, header_style="bold cyan", expand=True)
-            table.add_column("#", style="dim", width=3, justify="right")
+            table.add_column("#", style="dim", width=TABLE_COL_WIDTH_INDEX, justify="right")
             table.add_column("Book", style="bold")
-            table.add_column("Category", style="yellow", width=12)
-            table.add_column("Words", justify="right", width=7)
-            table.add_column("Score", justify="right", width=7)
+            table.add_column("Category", style="yellow", width=TABLE_COL_WIDTH_CATEGORY)
+            table.add_column("Words", justify="right", width=TABLE_COL_WIDTH_WORDS)
+            table.add_column("Score", justify="right", width=TABLE_COL_WIDTH_SCORE)
             table.add_column("Preview", style="dim")
 
             for i, result in enumerate(results, 1):
-                # Create preview (first 80 chars)
-                preview = result.content[:80].replace("\n", " ")
-                if len(result.content) > 80:
-                    preview += "..."
+                preview = create_result_preview(result.content)
 
                 table.add_row(
                     str(i),
@@ -108,7 +134,7 @@ def search(
                 )
 
             console.print(table)
-            console.print(f"\n[dim]Use --detailed flag to see full content[/dim]")
+            console.print("\n[dim]Use --detailed flag to see full content[/dim]")
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
@@ -120,14 +146,6 @@ def status():
     """Check Azure Search connection status and configuration."""
     try:
         search_client = get_azure_search_client()
-
-        if not search_client:
-            console.print("[yellow]Azure Search is not configured[/yellow]\n")
-            console.print("Required environment variables:")
-            console.print("  - AZURE_SEARCH_ENDPOINT")
-            console.print("  - AZURE_SEARCH_API_KEY")
-            console.print("  - AZURE_SEARCH_INDEX_NAME (optional)")
-            raise typer.Exit(1)
 
         console.print("[bold]Azure Search Configuration[/bold]\n")
         console.print(f"Endpoint: [cyan]{search_client.endpoint}[/cyan]")

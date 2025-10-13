@@ -1,9 +1,11 @@
 """Generate AI prompts based on recent diary entries."""
 from datetime import date
 from typing import List
-import re
+import logging
+import time
 from .entry_manager import DiaryEntry, EntryManager
 from .llm_client import LLMClient
+from .llm_analysis import _truncate_text
 from .constants import (
     DAILY_PROMPT_COUNT,
     WEEKLY_PROMPT_COUNT,
@@ -15,26 +17,42 @@ from .constants import (
     ENTRY_PREVIEW_LENGTH
 )
 
+logger = logging.getLogger(__name__)
 
-def remove_emojis(text: str) -> str:
-    """Remove emojis from text."""
-    # Emoji pattern covering most common emojis
-    emoji_pattern = re.compile(
-        "["
-        "\U0001F600-\U0001F64F"  # emoticons
-        "\U0001F300-\U0001F5FF"  # symbols & pictographs
-        "\U0001F680-\U0001F6FF"  # transport & map symbols
-        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
-        "\U00002702-\U000027B0"
-        "\U000024C2-\U0001F251"
-        "]+",
-        flags=re.UNICODE
-    )
-    return emoji_pattern.sub('', text).strip()
+
+def _parse_prompts_from_response(response: str, expected_count: int) -> List[str]:
+    """Parse numbered prompts from LLM response.
+    
+    Args:
+        response: Raw LLM response text
+        expected_count: Expected number of prompts
+        
+    Returns:
+        List of cleaned prompt strings
+    """
+    prompts = []
+    for line in response.split("\n"):
+        line = line.strip()
+        # Match patterns like "1. Question here" or "1) Question here" or "- Question"
+        if line and (line[0].isdigit() or line.startswith("-")):
+            # Remove leading number/bullet and whitespace
+            cleaned = line.lstrip("0123456789.-) ").strip()
+            if cleaned:
+                prompts.append(cleaned)
+    
+    # Return up to expected count
+    return prompts[:expected_count] if prompts else []
 
 
 def is_sunday(entry_date: date) -> bool:
-    """Check if date is Sunday (weekday 6)."""
+    """Check if date is Sunday (weekday 6).
+    
+    Args:
+        entry_date: Date to check
+        
+    Returns:
+        True if Sunday, False otherwise
+    """
     return entry_date.weekday() == 6
 
 
@@ -42,7 +60,18 @@ def generate_daily_prompts(
     recent_entries: List[DiaryEntry],
     llm_client: LLMClient
 ) -> List[str]:
-    """Generate 3 daily reflection prompts based on recent entries."""
+    """Generate 3 daily reflection prompts based on recent entries.
+    
+    Uses LLM to analyze recent diary entries and create personalized,
+    diverse reflection questions that reference specific past entries.
+    
+    Args:
+        recent_entries: List of recent diary entries for context (typically 3 days)
+        llm_client: LLM client for prompt generation
+        
+    Returns:
+        List of 3 reflection prompt strings with [[YYYY-MM-DD]] backlinks
+    """
     if not recent_entries:
         return [
             "What are you thinking about today?",
@@ -54,11 +83,13 @@ def generate_daily_prompts(
     context_parts = []
     for entry in recent_entries[:PROMPT_CONTEXT_DAYS]:
         date_str = entry.date.isoformat()
-        preview = entry.brain_dump[:ENTRY_PREVIEW_LENGTH] if len(entry.brain_dump) > ENTRY_PREVIEW_LENGTH else entry.brain_dump
+        preview = _truncate_text(entry.brain_dump, ENTRY_PREVIEW_LENGTH)
         if preview:
             context_parts.append(f"[[{date_str}]]: {preview}")
 
     context = "\n\n".join(context_parts)
+    
+    logger.debug(f"Generating daily prompts with {len(recent_entries)} recent entries")
 
     system_prompt = """You are a thoughtful journaling assistant. Generate 3 reflective questions
 based on the user's recent diary entries. Questions should:
@@ -108,36 +139,31 @@ Example of BAD (too similar):
 Each prompt MUST include at least one [[YYYY-MM-DD]] backlink."""
 
     try:
+        start_time = time.time()
         response = llm_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
             temperature=0.9,  # Higher temperature for more diversity
             max_tokens=PROMPT_MAX_TOKENS
         )
+        elapsed = time.time() - start_time
 
         # Parse prompts from response
-        prompts = []
-        for line in response.split("\n"):
-            line = line.strip()
-            # Match patterns like "1. Question here" or "1) Question here"
-            if line and (line[0].isdigit() or line.startswith("-")):
-                # Remove leading number/bullet and whitespace
-                cleaned = line.lstrip("0123456789.-) ").strip()
-                # Remove any emojis
-                cleaned = remove_emojis(cleaned)
-                if cleaned:
-                    prompts.append(cleaned)
+        prompts = _parse_prompts_from_response(response, DAILY_PROMPT_COUNT)
 
         # Ensure we have exactly the right number of prompts
         if len(prompts) >= DAILY_PROMPT_COUNT:
+            logger.info(f"Generated {DAILY_PROMPT_COUNT} daily prompts in {elapsed:.2f}s")
             return prompts[:DAILY_PROMPT_COUNT]
         elif prompts:
             # If we got some but not enough, pad with generic ones
             while len(prompts) < DAILY_PROMPT_COUNT:
                 prompts.append("What else is on your mind?")
+            logger.info(f"Generated {len(prompts)} daily prompts (padded) in {elapsed:.2f}s")
             return prompts
         else:
             # Fall back to generic prompts if parsing failed
+            logger.warning(f"Failed to parse LLM response in {elapsed:.2f}s, using generic prompts")
             return [
                 "What stood out to you recently?",
                 "What are you thinking about?",
@@ -146,7 +172,7 @@ Each prompt MUST include at least one [[YYYY-MM-DD]] backlink."""
 
     except RuntimeError as e:
         # Fall back to generic prompts if LLM fails
-        print(f"Warning: Failed to generate prompts via LLM: {e}")
+        logger.warning("Failed to generate prompts via LLM: %s", e)
         return [
             "What stood out to you recently?",
             "What are you thinking about?",
@@ -158,7 +184,18 @@ def generate_weekly_prompts(
     recent_entries: List[DiaryEntry],
     llm_client: LLMClient
 ) -> List[str]:
-    """Generate 5 weekly reflection prompts based on past week."""
+    """Generate 5 weekly reflection prompts based on past week.
+    
+    Uses LLM to analyze a full week of diary entries and create broader
+    reflection questions covering diverse life areas.
+    
+    Args:
+        recent_entries: List of diary entries from past week (typically 7 days)
+        llm_client: LLM client for prompt generation
+        
+    Returns:
+        List of 5 weekly reflection prompt strings with [[YYYY-MM-DD]] backlinks
+    """
     if not recent_entries:
         return [
             "What were the highlights of your week?",
@@ -172,11 +209,13 @@ def generate_weekly_prompts(
     context_parts = []
     for entry in recent_entries[:WEEKLY_CONTEXT_DAYS]:
         date_str = entry.date.isoformat()
-        preview = entry.brain_dump[:ENTRY_PREVIEW_LENGTH] if len(entry.brain_dump) > ENTRY_PREVIEW_LENGTH else entry.brain_dump
+        preview = _truncate_text(entry.brain_dump, ENTRY_PREVIEW_LENGTH)
         if preview:
             context_parts.append(f"[[{date_str}]]: {preview}")
 
     context = "\n\n".join(context_parts)
+    
+    logger.debug(f"Generating weekly prompts with {len(recent_entries)} recent entries")
 
     system_prompt = """You are a thoughtful journaling assistant. Generate 5 weekly reflection questions
 based on the user's past week of diary entries. Questions should:
@@ -211,32 +250,29 @@ Generate 5 numbered prompts about DIFFERENT aspects of the week. Each prompt MUS
 Ensure maximum diversity - cover different life areas, NOT the same topic 5 times."""
 
     try:
+        start_time = time.time()
         response = llm_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
             temperature=PROMPT_TEMPERATURE,
             max_tokens=WEEKLY_PROMPT_MAX_TOKENS
         )
+        elapsed = time.time() - start_time
 
         # Parse prompts from response
-        prompts = []
-        for line in response.split("\n"):
-            line = line.strip()
-            if line and (line[0].isdigit() or line.startswith("-")):
-                cleaned = line.lstrip("0123456789.-) ").strip()
-                # Remove any emojis
-                cleaned = remove_emojis(cleaned)
-                if cleaned:
-                    prompts.append(cleaned)
+        prompts = _parse_prompts_from_response(response, WEEKLY_PROMPT_COUNT)
 
         # Ensure we have exactly the right number of prompts
         if len(prompts) >= WEEKLY_PROMPT_COUNT:
+            logger.info(f"Generated {WEEKLY_PROMPT_COUNT} weekly prompts in {elapsed:.2f}s")
             return prompts[:WEEKLY_PROMPT_COUNT]
         elif prompts:
             while len(prompts) < WEEKLY_PROMPT_COUNT:
                 prompts.append("What else comes to mind?")
+            logger.info(f"Generated {len(prompts)} weekly prompts (padded) in {elapsed:.2f}s")
             return prompts
         else:
+            logger.warning(f"Failed to parse LLM response in {elapsed:.2f}s, using generic prompts")
             return [
                 "What were the key themes this week?",
                 "What did you accomplish?",
@@ -246,7 +282,7 @@ Ensure maximum diversity - cover different life areas, NOT the same topic 5 time
             ]
 
     except RuntimeError as e:
-        print(f"Warning: Failed to generate weekly prompts via LLM: {e}")
+        logger.warning("Failed to generate weekly prompts via LLM: %s", e)
         return [
             "What were the key themes this week?",
             "What did you accomplish?",
@@ -256,12 +292,116 @@ Ensure maximum diversity - cover different life areas, NOT the same topic 5 time
         ]
 
 
+def generate_planning_prompts(
+    yesterday_entry: DiaryEntry,
+    llm_client: LLMClient
+) -> List[str]:
+    """Generate 3 forward-looking planning prompts based on yesterday's reflection.
+    
+    Uses LLM to analyze yesterday's entry and create actionable planning
+    questions for today focused on follow-up, preparation, and priorities.
+    
+    Args:
+        yesterday_entry: Yesterday's diary entry to build upon
+        llm_client: LLM client for prompt generation
+        
+    Returns:
+        List of 3 planning prompt strings with [[YYYY-MM-DD]] backlink to yesterday
+    """
+    if not yesterday_entry or not yesterday_entry.brain_dump:
+        return [
+            "What are your main priorities today?",
+            "What meetings or events need preparation?",
+            "What unfinished items need attention?"
+        ]
+
+    date_str = yesterday_entry.date.isoformat()
+    preview = _truncate_text(yesterday_entry.brain_dump, ENTRY_PREVIEW_LENGTH)
+    
+    logger.debug(f"Generating planning prompts based on [[{date_str}]]")
+
+    system_prompt = """You are a thoughtful planning assistant. Generate 3 forward-looking questions
+based on the user's reflection from yesterday. Questions should:
+- Reference yesterday's entry using [[YYYY-MM-DD]] format
+- Help the user follow up on items mentioned yesterday
+- Focus on action, preparation, and prioritization
+- Be personal and specific (not generic)
+- Do NOT use emojis in your questions
+- Use plain text only
+
+IMPORTANT: Questions should be forward-looking for TODAY, not reflecting on yesterday.
+
+Format each question on a new line, numbered 1-3. Be concise."""
+
+    user_prompt = f"""Based on yesterday's reflection entry, generate 3 planning prompts for today:
+
+Yesterday's entry [[{date_str}]]:
+{preview}
+
+Generate 3 questions that help the user:
+1. Follow up on items mentioned in [[{date_str}]]
+2. Prepare for today's activities
+3. Prioritize what needs attention
+
+Each prompt MUST include the [[{date_str}]] backlink to reference yesterday."""
+
+    try:
+        start_time = time.time()
+        response = llm_client.generate_sync(
+            prompt=user_prompt,
+            system=system_prompt,
+            temperature=PROMPT_TEMPERATURE,
+            max_tokens=PROMPT_MAX_TOKENS
+        )
+        elapsed = time.time() - start_time
+
+        # Parse prompts from response
+        prompts = _parse_prompts_from_response(response, DAILY_PROMPT_COUNT)
+
+        # Ensure we have exactly 3 prompts
+        if len(prompts) >= DAILY_PROMPT_COUNT:
+            logger.info(f"Generated {DAILY_PROMPT_COUNT} planning prompts in {elapsed:.2f}s")
+            return prompts[:DAILY_PROMPT_COUNT]
+        elif prompts:
+            while len(prompts) < DAILY_PROMPT_COUNT:
+                prompts.append("What else needs your attention today?")
+            logger.info(f"Generated {len(prompts)} planning prompts (padded) in {elapsed:.2f}s")
+            return prompts
+        else:
+            logger.warning(f"Failed to parse LLM response in {elapsed:.2f}s, using generic prompts")
+            return [
+                "What are your main priorities today?",
+                "What meetings or events need preparation?",
+                "What unfinished items need attention?"
+            ]
+
+    except RuntimeError as e:
+        logger.warning("Failed to generate planning prompts via LLM: %s", e)
+        return [
+            "What are your main priorities today?",
+            "What meetings or events need preparation?",
+            "What unfinished items need attention?"
+        ]
+
+
 def generate_prompts_for_date(
     target_date: date,
     entry_manager: EntryManager,
     llm_client: LLMClient
 ) -> List[str]:
-    """Generate prompts for a specific date based on context."""
+    """Generate prompts for a specific date based on context.
+    
+    Orchestrator function that determines whether to generate daily (3 prompts)
+    or weekly (5 prompts) based on whether target_date is Sunday.
+    
+    Args:
+        target_date: Date to generate prompts for
+        entry_manager: Manager for reading past diary entries
+        llm_client: LLM client for prompt generation
+        
+    Returns:
+        List of 3 prompts (daily) or 5 prompts (weekly) with backlinks
+    """
     # Get past calendar days (not last N entries)
     past_dates = entry_manager.get_past_calendar_days(target_date, PROMPT_CONTEXT_DAYS)
     recent_entries = entry_manager.get_entries_for_dates(past_dates)

@@ -22,9 +22,17 @@ def mock_env(monkeypatch, temp_dir):
 
     monkeypatch.setenv("DIARY_PATH", str(diary_path))
     monkeypatch.setenv("PLANNER_PATH", str(planner_path))
-    monkeypatch.setenv("LLM_PROVIDER", "ollama")
-    monkeypatch.setenv("OLLAMA_MODEL", "llama3.1:latest")
-    monkeypatch.setenv("OLLAMA_URL", "http://localhost:11434")
+    
+    # Azure OpenAI configuration (required)
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+    
+    # Azure Search configuration (required)
+    monkeypatch.setenv("AZURE_SEARCH_ENDPOINT", "https://test.search.windows.net")
+    monkeypatch.setenv("AZURE_SEARCH_API_KEY", "test-search-key")
+    monkeypatch.setenv("AZURE_SEARCH_INDEX_NAME", "test-index")
 
     return {
         "diary_path": diary_path,

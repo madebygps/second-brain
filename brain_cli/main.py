@@ -1,23 +1,28 @@
 """Main CLI entry point for the brain system."""
+import logging
+import sys
 import typer
-from rich.console import Console
 
 # Import subcommands
-from brain_cli import diary_commands, daemon_commands, notes_commands
+from brain_cli.diary_commands import app as diary_app
+from brain_cli.notes_commands import app as notes_app
+
+# Configure logging
+logging.basicConfig(
+    level=logging.WARNING,  # Only show warnings and errors by default
+    format='%(levelname)s: %(message)s',
+    stream=sys.stderr
+)
 
 app = typer.Typer(
-    help="Your AI-powered second brain - unified interface for diary, notes, and planning",
-    no_args_is_help=True
+    help="Your AI-powered second brain for journaling with semantic backlinks and intelligent notes search",
+    no_args_is_help=True,
+    add_completion=False
 )
-console = Console()
 
 # Register subcommands
-app.add_typer(diary_commands.app, name="diary", help="Diary management with AI prompts and backlinks")
-app.add_typer(daemon_commands.app, name="daemon", help="Background automation daemon")
-app.add_typer(notes_commands.app, name="notes", help="Search book notes using Azure AI Search")
-
-# Future subcommands can be added here:
-# app.add_typer(planner_commands.app, name="planner", help="Task planning and tracking")
+app.add_typer(diary_app, name="diary")
+app.add_typer(notes_app, name="notes")
 
 
 if __name__ == "__main__":

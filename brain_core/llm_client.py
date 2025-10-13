@@ -1,5 +1,5 @@
-"""Unified LLM client interface supporting both Ollama and Azure OpenAI."""
-from typing import Optional, Protocol
+"""Unified LLM client interface for Azure OpenAI."""
+from typing import Optional
 from abc import ABC, abstractmethod
 
 

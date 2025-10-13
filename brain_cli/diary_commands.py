@@ -1,25 +1,17 @@
 """Diary management commands."""
 import typer
+import re
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from datetime import date, timedelta
-from pathlib import Path
-from typing import Optional
 
 from brain_core.config import get_config, get_llm_client
-from brain_core.entry_manager import EntryManager, DiaryEntry
-from brain_core.template_generator import generate_prompts_for_date
-from brain_core.analysis import (
-    find_related_entries,
-    generate_topic_tags,
-    extract_todos,
-    extract_themes,
-    create_memory_trace_report
-)
+from brain_core.entry_manager import EntryManager
+from brain_core.template_generator import generate_prompts_for_date, generate_planning_prompts
+from brain_core.report_generator import create_memory_trace_report
 from brain_core.llm_analysis import (
     generate_semantic_backlinks,
-    generate_semantic_backlinks_enhanced,
     generate_semantic_tags
 )
 from brain_core.constants import (
@@ -30,15 +22,85 @@ from brain_core.constants import (
 app = typer.Typer(help="AI-powered diary with smart prompts and automatic backlinks")
 console = Console()
 
+# Constants
+TEMPORAL_LOOKBACK_DAYS = 3
+MAX_SEMANTIC_LINKS = 5
+MAX_TOPIC_TAGS = 5
+MAX_PATTERN_TAGS = 15
+
 
 def parse_date_arg(date_arg: str) -> date:
-    """Parse date argument (today, yesterday, or YYYY-MM-DD)."""
+    """Parse date argument (today, yesterday, or YYYY-MM-DD).
+    
+    Args:
+        date_arg: Date string to parse ("today", "yesterday", or "YYYY-MM-DD")
+        
+    Returns:
+        Parsed date object
+    """
     if date_arg.lower() == "today":
         return date.today()
     elif date_arg.lower() == "yesterday":
         return date.today() - timedelta(days=1)
     else:
         return date.fromisoformat(date_arg)
+
+
+def check_llm_connection(llm_client) -> bool:
+    """Check LLM connection and print error if unavailable.
+    
+    Args:
+        llm_client: LLM client instance to check
+        
+    Returns:
+        True if connection successful, False otherwise
+    """
+    if not llm_client.check_connection_sync():
+        console.print("[red]Error: Cannot connect to Azure OpenAI[/red]")
+        return False
+    return True
+
+
+def generate_entry_links(entry, entry_manager, llm_client):
+    """Generate semantic and temporal links for an entry.
+    
+    Args:
+        entry: DiaryEntry to generate links for
+        entry_manager: EntryManager instance
+        llm_client: LLM client for semantic analysis
+        
+    Returns:
+        Tuple of (temporal_links, tags, link_metadata, semantic_links)
+    """
+    # Get past entries for semantic analysis
+    past_entries = entry_manager.list_entries(days=PAST_ENTRIES_LOOKBACK_DAYS)
+    
+    # Use LLM to find semantic backlinks with confidence scores
+    semantic_links = generate_semantic_backlinks(
+        entry,
+        past_entries,
+        llm_client,
+        max_links=MAX_SEMANTIC_LINKS
+    )
+    
+    # Generate topic tags using LLM
+    tags = generate_semantic_tags([entry], llm_client, max_tags=MAX_TOPIC_TAGS)
+    
+    # Get temporal links (past N days)
+    past_dates = entry_manager.get_past_calendar_days(entry.date, TEMPORAL_LOOKBACK_DAYS)
+    temporal_links = [d.isoformat() for d in past_dates if entry_manager.entry_exists(d)]
+    
+    # Build link metadata dict for enhanced display
+    link_metadata = {}
+    for link in semantic_links:
+        if link.target_date not in temporal_links:
+            temporal_links.append(link.target_date)
+        link_metadata[link.target_date] = {
+            "confidence": link.confidence,
+            "reason": link.reason
+        }
+    
+    return temporal_links, tags, link_metadata, semantic_links
 
 
 @app.command()
@@ -68,8 +130,7 @@ def create(
             llm_client = get_llm_client()
 
             # Check LLM connection
-            if not llm_client.check_connection_sync():
-                console.print(f"[red]Error: Cannot connect to LLM provider ({config.llm_provider})[/red]")
+            if not check_llm_connection(llm_client):
                 return
 
             prompts = generate_prompts_for_date(entry_date, entry_manager, llm_client)
@@ -81,6 +142,81 @@ def create(
 
         console.print(f"[green]✓[/green] Created entry: [bold]{entry.filename}[/bold]")
         console.print(f"[dim]Location: {config.diary_path / entry.filename}[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def plan(
+    date_arg: str = typer.Argument("today", help="Date (today, tomorrow, or YYYY-MM-DD)")
+):
+    """Create a morning planning entry with focus on today's priorities."""
+    try:
+        config = get_config()
+
+        # Parse date - handle "tomorrow" as well
+        if date_arg.lower() == "tomorrow":
+            entry_date = date.today() + timedelta(days=1)
+        else:
+            entry_date = parse_date_arg(date_arg)
+
+        entry_manager = EntryManager(config.diary_path)
+
+        # Check if plan entry already exists
+        if entry_manager.entry_exists(entry_date, entry_type="plan"):
+            console.print(f"[yellow]Plan entry for {entry_date.isoformat()} already exists[/yellow]")
+            return
+
+        # Get yesterday's reflection entry for context
+        yesterday_date = entry_date - timedelta(days=1)
+        yesterday_entry = entry_manager.read_entry(yesterday_date, entry_type="reflection")
+
+        # Extract pending todos from yesterday's plan (if it exists)
+        pending_todos = []
+        yesterday_plan = entry_manager.read_entry(yesterday_date, entry_type="plan")
+        if yesterday_plan:
+            for line in yesterday_plan.content.split("\n"):
+                if re.match(r"^- \[ \]", line.strip()):
+                    todo_text = re.sub(r"^- \[ \]\s*", "", line.strip())
+                    if todo_text:
+                        pending_todos.append(f"{todo_text} (from [[{yesterday_date.isoformat()}]])")
+
+        # Generate planning prompts with progress indicator
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            progress.add_task(description="Generating planning prompts...", total=None)
+
+            llm_client = get_llm_client()
+
+            # Check LLM connection
+            if not check_llm_connection(llm_client):
+                return
+
+            # Generate prompts based on yesterday's reflection
+            if yesterday_entry and yesterday_entry.has_substantial_content:
+                prompts = generate_planning_prompts(yesterday_entry, llm_client)
+            else:
+                # Fallback prompts if no yesterday entry
+                prompts = [
+                    "What are your main priorities today?",
+                    "What meetings or events need preparation?",
+                    "What unfinished items need attention?"
+                ]
+
+        # Create plan entry
+        entry = entry_manager.create_plan_template(entry_date, prompts, pending_todos)
+
+        entry_manager.write_entry(entry)
+
+        console.print(f"[green]✓[/green] Created plan entry: [bold]{entry.filename}[/bold]")
+        console.print(f"[dim]Location: {config.diary_path / entry.filename}[/dim]")
+        if pending_todos:
+            console.print(f"[dim]Carried forward {len(pending_todos)} pending items from yesterday[/dim]")
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
@@ -113,8 +249,7 @@ def link(
         llm_client = get_llm_client()
 
         # Check LLM connection
-        if not llm_client.check_connection_sync():
-            console.print(f"[red]Error: Cannot connect to LLM provider ({config.llm_provider})[/red]")
+        if not check_llm_connection(llm_client):
             return
 
         with Progress(
@@ -124,36 +259,10 @@ def link(
         ) as progress:
             progress.add_task(description="Finding related entries with enhanced LLM analysis...", total=None)
 
-            # Get past entries for context
-            past_entries = entry_manager.list_entries(days=PAST_ENTRIES_LOOKBACK_DAYS)
-
-            # Use enhanced LLM to find semantic backlinks with confidence scores
-            semantic_links_enhanced = generate_semantic_backlinks_enhanced(
-                entry,
-                past_entries,
-                llm_client,
-                max_links=5
+            # Generate all links using helper function
+            temporal_links, tags, link_metadata, semantic_links = generate_entry_links(
+                entry, entry_manager, llm_client
             )
-
-            # Generate topic tags using LLM
-            context_entries = [entry]
-            tags = generate_semantic_tags(context_entries, llm_client, max_tags=5)
-
-        # Get temporal links (past 3 days)
-        past_dates = entry_manager.get_past_calendar_days(entry_date, 3)
-        temporal_links = [d.isoformat() for d in past_dates if entry_manager.entry_exists(d)]
-
-        # Build link metadata dict for enhanced display
-        link_metadata = {}
-
-        # Add semantic links with metadata
-        for link in semantic_links_enhanced:
-            if link.target_date not in temporal_links:
-                temporal_links.append(link.target_date)
-            link_metadata[link.target_date] = {
-                "confidence": link.confidence,
-                "reason": link.reason
-            }
 
         # Update entry with metadata
         updated_entry = entry_manager.update_memory_links(
@@ -163,7 +272,7 @@ def link(
 
         console.print(f"[green]✓[/green] Updated links for: [bold]{entry.filename}[/bold]")
         console.print(f"[dim]  Temporal links: {len(temporal_links)}[/dim]")
-        console.print(f"[dim]  Semantic links: {len(semantic_links_enhanced)} (high: {sum(1 for l in semantic_links_enhanced if l.confidence == 'high')})[/dim]")
+        console.print(f"[dim]  Semantic links: {len(semantic_links)} (high: {sum(1 for link in semantic_links if link.confidence == 'high')})[/dim]")
         console.print(f"[dim]  Topic tags: {len(tags)}[/dim]")
 
     except Exception as e:
@@ -172,12 +281,13 @@ def link(
 
 
 @app.command()
-def analyze(
-    days: int = typer.Argument(30, help="Number of days to analyze")
+def report(
+    days: int = typer.Argument(30, help="Number of days to include in report")
 ):
-    """Generate memory trace analysis report."""
+    """Generate a memory trace report showing recurring activities and semantic connections between entries."""
     try:
         config = get_config()
+        llm_client = get_llm_client()
         entry_manager = EntryManager(config.diary_path)
 
         with Progress(
@@ -185,7 +295,7 @@ def analyze(
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
-            progress.add_task(description=f"Analyzing past {days} days...", total=None)
+            progress.add_task(description=f"Generating memory trace report for past {days} days...", total=None)
 
             entries = entry_manager.list_entries(days=days)
 
@@ -193,51 +303,9 @@ def analyze(
                 console.print(f"[yellow]No entries found in past {days} days[/yellow]")
                 return
 
-            report = create_memory_trace_report(entries)
+            report = create_memory_trace_report(entries, llm_client)
 
         console.print(report)
-
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
-
-
-@app.command()
-def todos(
-    date_arg: str = typer.Argument("today", help="Date (today, yesterday, or YYYY-MM-DD)"),
-    save: bool = typer.Option(False, "--save", "-s", help="Save todos to planner file")
-):
-    """Extract action items from an entry."""
-    try:
-        config = get_config()
-        entry_date = parse_date_arg(date_arg)
-
-        entry_manager = EntryManager(config.diary_path)
-
-        entry = entry_manager.read_entry(entry_date)
-        if not entry:
-            console.print(f"[red]No entry found for {entry_date.isoformat()}[/red]")
-            return
-
-        todo_items = extract_todos(entry)
-
-        if not todo_items:
-            console.print(f"[yellow]No todos found in {entry_date.isoformat()}[/yellow]")
-            return
-
-        console.print(f"[bold]Todos from {entry_date.isoformat()}:[/bold]\n")
-        for i, todo in enumerate(todo_items, 1):
-            console.print(f"{i}. {todo}")
-
-        if save:
-            # Save to planner file
-            planner_file = config.planner_path / f"{entry_date.isoformat()}-todos.md"
-            content = f"# Todos from {entry_date.isoformat()}\n\n"
-            for todo in todo_items:
-                content += f"- [ ] {todo}\n"
-
-            planner_file.write_text(content, encoding="utf-8")
-            console.print(f"\n[green]✓[/green] Saved to: {planner_file}")
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
@@ -283,10 +351,10 @@ def list(
 
 
 @app.command()
-def themes(
+def patterns(
     days: int = typer.Argument(7, help="Number of days to analyze")
 ):
-    """Show recurring themes from recent entries using LLM analysis."""
+    """Identify emotional and psychological patterns from recent entries using LLM analysis."""
     try:
         config = get_config()
         entry_manager = EntryManager(config.diary_path)
@@ -301,8 +369,7 @@ def themes(
         llm_client = get_llm_client()
 
         # Check LLM connection
-        if not llm_client.check_connection_sync():
-            console.print(f"[red]Error: Cannot connect to LLM provider ({config.llm_provider})[/red]")
+        if not check_llm_connection(llm_client):
             return
 
         with Progress(
@@ -310,18 +377,18 @@ def themes(
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
-            progress.add_task(description="Analyzing themes with LLM...", total=None)
+            progress.add_task(description="Analyzing emotional patterns with LLM...", total=None)
 
-            # Use LLM to extract semantic themes (request more tags for themes view)
-            theme_list = generate_semantic_tags(entries, llm_client, max_tags=15)
+            # Use LLM to extract semantic themes (request more tags for patterns view)
+            theme_list = generate_semantic_tags(entries, llm_client, max_tags=MAX_PATTERN_TAGS)
 
         if not theme_list:
-            console.print(f"[yellow]No themes identified in past {days} days[/yellow]")
+            console.print(f"[yellow]No patterns identified in past {days} days[/yellow]")
             return
 
-        table = Table(title=f"Themes (past {days} days)")
+        table = Table(title=f"Emotional & Psychological Patterns (past {days} days)")
         table.add_column("Rank", justify="right", style="cyan")
-        table.add_column("Theme", style="bold")
+        table.add_column("Pattern", style="bold")
 
         for i, theme in enumerate(theme_list, 1):
             table.add_row(str(i), f"#{theme}")
@@ -366,9 +433,9 @@ def refresh(
                 console.print()
 
         if not entries_to_refresh:
-            console.print(f"[yellow]No entries to refresh[/yellow]")
+            console.print("[yellow]No entries to refresh[/yellow]")
             console.print(f"[dim]Found {len(entries)} entries total, but all have <{MIN_SUBSTANTIAL_CONTENT_CHARS} chars of content[/dim]")
-            console.print(f"[dim]Use --all flag to refresh all entries regardless of length[/dim]")
+            console.print("[dim]Use --all flag to refresh all entries regardless of length[/dim]")
             return
 
         console.print(f"[bold]Refreshing backlinks for {len(entries_to_refresh)} entries...[/bold]")
@@ -381,8 +448,7 @@ def refresh(
         llm_client = get_llm_client()
 
         # Check LLM connection
-        if not llm_client.check_connection_sync():
-            console.print(f"[red]Error: Cannot connect to LLM provider ({config.llm_provider})[/red]")
+        if not check_llm_connection(llm_client):
             return
 
         with Progress(
@@ -391,38 +457,17 @@ def refresh(
             console=console
         ) as progress:
             task = progress.add_task(
-                description=f"Processing entries with LLM...",
+                description="Processing entries with LLM...",
                 total=len(entries_to_refresh)
             )
 
             updated_count = 0
-            past_entries = entry_manager.list_entries(days=PAST_ENTRIES_LOOKBACK_DAYS)
 
             for entry in entries_to_refresh:
-                # Use enhanced LLM to find semantic backlinks
-                semantic_links_enhanced = generate_semantic_backlinks_enhanced(
-                    entry,
-                    past_entries,
-                    llm_client,
-                    max_links=5
+                # Generate all links using helper function
+                temporal_links, tags, link_metadata, _ = generate_entry_links(
+                    entry, entry_manager, llm_client
                 )
-
-                # Generate topic tags using LLM
-                tags = generate_semantic_tags([entry], llm_client, max_tags=5)
-
-                # Get temporal links
-                past_dates = entry_manager.get_past_calendar_days(entry.date, 3)
-                temporal_links = [d.isoformat() for d in past_dates if entry_manager.entry_exists(d)]
-
-                # Build link metadata
-                link_metadata = {}
-                for link in semantic_links_enhanced:
-                    if link.target_date not in temporal_links:
-                        temporal_links.append(link.target_date)
-                    link_metadata[link.target_date] = {
-                        "confidence": link.confidence,
-                        "reason": link.reason
-                    }
 
                 # Update entry with metadata
                 updated_entry = entry_manager.update_memory_links(

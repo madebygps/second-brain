@@ -1,12 +1,9 @@
 """Azure AI Search client for querying book notes."""
-import os
-from typing import List, Optional
+from typing import List
 from dataclasses import dataclass
-from dotenv import load_dotenv
 
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
-from azure.search.documents.models import VectorizedQuery
 
 
 @dataclass
@@ -144,23 +141,4 @@ class AzureSearchNotesClient:
             return False
 
 
-def get_azure_search_client() -> Optional[AzureSearchNotesClient]:
-    """Factory function to create Azure Search client from environment variables.
 
-    Returns:
-        AzureSearchNotesClient if configuration is valid, None otherwise
-    """
-    load_dotenv()
-
-    endpoint = os.getenv("AZURE_SEARCH_ENDPOINT")
-    api_key = os.getenv("AZURE_SEARCH_API_KEY")
-    index_name = os.getenv("AZURE_SEARCH_INDEX_NAME", "second-brain-notes")
-
-    if not endpoint or not api_key:
-        return None
-
-    return AzureSearchNotesClient(
-        endpoint=endpoint,
-        api_key=api_key,
-        index_name=index_name
-    )
