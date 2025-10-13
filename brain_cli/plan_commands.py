@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from typing import List
 
 from brain_core.config import get_config, get_llm_client
+from brain_core.logging_config import log_operation_timing
 from brain_core.entry_manager import EntryManager
 from brain_core.constants import TASK_EXTRACTION_TEMPERATURE, TASK_EXTRACTION_MAX_TOKENS
 
@@ -81,13 +82,15 @@ Extract specific, actionable tasks that should be done today. Return as a number
             prompt=user_prompt,
             system=system_prompt,
             temperature=TASK_EXTRACTION_TEMPERATURE,
-            max_tokens=TASK_EXTRACTION_MAX_TOKENS
+            max_tokens=TASK_EXTRACTION_MAX_TOKENS,
+            operation="task_extraction",
+            entry_date=diary_date
         )
         elapsed = time.time() - start_time
         
         # Parse tasks from response
         if "NO_TASKS" in response.upper():
-            logger.info(f"No tasks extracted from diary in {elapsed:.2f}s")
+            logger.debug(f"No tasks extracted from diary in {elapsed:.2f}s")
             return []
         
         tasks = []
@@ -100,7 +103,7 @@ Extract specific, actionable tasks that should be done today. Return as a number
                 if task and len(task) > 5:  # Minimum task length
                     tasks.append(task)
         
-        logger.info(f"Extracted {len(tasks)} tasks from diary in {elapsed:.2f}s")
+        logger.debug(f"Extracted {len(tasks)} tasks from diary in {elapsed:.2f}s")
         return tasks
         
     except Exception as e:

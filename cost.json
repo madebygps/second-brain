@@ -1,0 +1,28 @@
+[
+  {
+    "id": 2,
+    "timestamp": "2025-10-13T15:30:31.242848",
+    "operation": "daily_prompts",
+    "model": "gpt-4o",
+    "prompt_tokens": 676,
+    "completion_tokens": 200,
+    "total_tokens": 876,
+    "elapsed_seconds": 1.6599750518798828,
+    "estimated_cost": 0.032279999999999996,
+    "entry_date": "2025-10-13",
+    "metadata": "{\"temperature\": 0.9, \"max_tokens\": 300, \"prompt_length\": 1856, \"response_length\": 939, \"system_prompt_length\": 952}"
+  },
+  {
+    "id": 1,
+    "timestamp": "2025-10-13T15:30:21.016414",
+    "operation": "task_extraction",
+    "model": "gpt-4o",
+    "prompt_tokens": 402,
+    "completion_tokens": 38,
+    "total_tokens": 440,
+    "elapsed_seconds": 1.3607099056243896,
+    "estimated_cost": 0.014339999999999999,
+    "entry_date": "2025-10-12",
+    "metadata": "{\"temperature\": 0.4, \"max_tokens\": 300, \"prompt_length\": 1078, \"response_length\": 148, \"system_prompt_length\": 694}"
+  }
+]

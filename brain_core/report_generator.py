@@ -5,6 +5,7 @@ import logging
 import time
 from .entry_manager import DiaryEntry
 from .llm_client import LLMClient
+from .logging_config import log_operation_timing
 from .llm_analysis import generate_semantic_backlinks, _truncate_text
 from .constants import (
     DEFAULT_THEMES_COUNT,
@@ -67,7 +68,8 @@ Entries:
             prompt=system_prompt,
             system="",  # No separate system prompt needed
             temperature=SEMANTIC_TEMPERATURE,
-            max_tokens=SEMANTIC_MAX_TOKENS
+            max_tokens=SEMANTIC_MAX_TOKENS,
+            operation="theme_extraction"
         )
         elapsed = time.time() - start_time
         

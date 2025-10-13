@@ -12,9 +12,23 @@ class LLMClient(ABC):
         prompt: str,
         system: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        operation: str = "generate",
+        entry_date: Optional[str] = None
     ) -> str:
-        """Generate text synchronously."""
+        """Generate text synchronously.
+        
+        Args:
+            prompt: User prompt text
+            system: System message (optional)
+            temperature: Sampling temperature (0.0-2.0)
+            max_tokens: Maximum tokens to generate
+            operation: Type of operation for tracking (e.g., 'task_extraction', 'semantic_backlinks')
+            entry_date: Date of diary entry being processed (YYYY-MM-DD format)
+            
+        Returns:
+            Generated text response
+        """
         pass
 
     @abstractmethod

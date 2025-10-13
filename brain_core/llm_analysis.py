@@ -6,6 +6,7 @@ import logging
 import time
 from .entry_manager import DiaryEntry
 from .llm_client import LLMClient
+from .logging_config import log_operation_timing
 from .constants import (
     MAX_SEMANTIC_LINK_CANDIDATES,
     MAX_SEMANTIC_LINKS,
@@ -157,7 +158,9 @@ Return JSON only (no explanations):"""
             prompt=user_prompt,
             system=system_prompt,
             temperature=0.2,
-            max_tokens=ENTITY_EXTRACTION_MAX_TOKENS
+            max_tokens=ENTITY_EXTRACTION_MAX_TOKENS,
+            operation="entity_extraction",
+            entry_date=entry.date
         )
         elapsed = time.time() - start_time
 
@@ -282,7 +285,9 @@ Which candidates are semantically related? Return JSON array only (no explanatio
             prompt=user_prompt,
             system=system_prompt,
             temperature=SEMANTIC_TEMPERATURE,
-            max_tokens=SEMANTIC_BACKLINKS_MAX_TOKENS
+            max_tokens=SEMANTIC_BACKLINKS_MAX_TOKENS,
+            operation="semantic_backlinks",
+            entry_date=target_entry.date
         )
         elapsed = time.time() - start_time
 
@@ -407,7 +412,9 @@ Return only the tags (one per line, with # prefix), focusing on themes over topi
             prompt=user_prompt,
             system=system_prompt,
             temperature=TAG_TEMPERATURE,
-            max_tokens=TAG_MAX_TOKENS
+            max_tokens=TAG_MAX_TOKENS,
+            operation="semantic_tags",
+            entry_date=entries[0].date if entries else None
         )
         elapsed = time.time() - start_time
 

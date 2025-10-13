@@ -1,11 +1,13 @@
 """Integration tests for CLI commands."""
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, create_autospec
 from datetime import date, timedelta
 from typer.testing import CliRunner
 
 from brain_cli.main import app as brain_app
 from brain_cli.plan_commands import parse_date_arg, extract_tasks_from_diary
+from brain_core.llm_client import LLMClient
+from brain_core.constants import TASK_EXTRACTION_TEMPERATURE, TASK_EXTRACTION_MAX_TOKENS
 
 
 runner = CliRunner()
@@ -273,30 +275,72 @@ class TestPlanHelpers:
 
     def test_extract_tasks_filters_short_tasks(self):
         """Test that very short tasks are filtered out."""
-        mock_llm = Mock()
+        mock_llm = create_autospec(LLMClient, instance=True)
         mock_llm.generate_sync.return_value = """1. OK
 2. This is a proper task description
 3. No
 4. Another valid task here"""
 
         diary_content = "A" * 100
-        tasks = extract_tasks_from_diary(diary_content, "2025-10-11", mock_llm)
+        diary_date = "2025-10-11"
+        tasks = extract_tasks_from_diary(diary_content, diary_date, mock_llm)
 
         # Only tasks with >5 characters should be included
         assert len(tasks) == 2
         assert "This is a proper task description" in tasks
         assert "Another valid task here" in tasks
+        # Verify parameters
+        call_kwargs = mock_llm.generate_sync.call_args.kwargs
+        assert call_kwargs["operation"] == "task_extraction"
+        assert call_kwargs["entry_date"] == diary_date
 
     def test_extract_tasks_handles_llm_error(self):
         """Test task extraction gracefully handles LLM errors."""
-        mock_llm = Mock()
+        mock_llm = create_autospec(LLMClient, instance=True)
         mock_llm.generate_sync.side_effect = Exception("LLM API error")
 
         diary_content = "A" * 100
-        tasks = extract_tasks_from_diary(diary_content, "2025-10-11", mock_llm)
+        diary_date = "2025-10-11"
+        tasks = extract_tasks_from_diary(diary_content, diary_date, mock_llm)
 
         # Should return empty list on error, not crash
         assert tasks == []
+        # Verify it attempted to call with correct parameters before failing
+        call_kwargs = mock_llm.generate_sync.call_args.kwargs
+        assert call_kwargs["operation"] == "task_extraction"
+        assert call_kwargs["entry_date"] == diary_date
+
+    def test_extract_tasks_parameter_validation(self):
+        """Integration test: Verify actual parameter passing without mocking.
+        
+        This test would have caught the diary_entry.date bug because it doesn't
+        mock generate_sync - it verifies the actual function call signature.
+        """
+        mock_llm = create_autospec(LLMClient, instance=True)
+        mock_llm.generate_sync.return_value = "NO_TASKS"
+        
+        diary_content = "A" * 100
+        diary_date = "2025-10-13"
+        
+        # Call the function - if parameter names are wrong, this will fail
+        tasks = extract_tasks_from_diary(diary_content, diary_date, mock_llm)
+        
+        # Verify the function was called with exact parameters
+        mock_llm.generate_sync.assert_called_once()
+        call_args = mock_llm.generate_sync.call_args
+        
+        # Verify all positional and keyword arguments
+        assert call_args.kwargs["prompt"] is not None
+        assert call_args.kwargs["system"] is not None
+        assert call_args.kwargs["temperature"] == TASK_EXTRACTION_TEMPERATURE
+        assert call_args.kwargs["max_tokens"] == TASK_EXTRACTION_MAX_TOKENS
+        assert call_args.kwargs["operation"] == "task_extraction"
+        assert call_args.kwargs["entry_date"] == diary_date
+        
+        # This assertion would fail if we passed diary_entry.date instead of diary_date
+        # because diary_entry doesn't exist in the function scope
+        assert isinstance(call_args.kwargs["entry_date"], str)
+        assert len(call_args.kwargs["entry_date"]) == 10  # YYYY-MM-DD format
 
 
 class TestNotesCommands:

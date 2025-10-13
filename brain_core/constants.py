@@ -23,9 +23,9 @@ LLM_TIMEOUT_SECONDS = 300.0  # 5 minutes
 LLM_CONNECTION_CHECK_TIMEOUT = 5.0
 
 # Prompt generation
-DAILY_PROMPT_COUNT = 1
+DAILY_PROMPT_COUNT = 2
 WEEKLY_PROMPT_COUNT = 5
-PROMPT_CONTEXT_DAYS = 3
+PROMPT_CONTEXT_DAYS = 2
 WEEKLY_CONTEXT_DAYS = 7
 PROMPT_TEMPERATURE = 0.8
 PROMPT_MAX_TOKENS = 300
@@ -50,3 +50,23 @@ PAST_ENTRIES_LOOKBACK_DAYS = 90
 # Task extraction
 TASK_EXTRACTION_TEMPERATURE = 0.4
 TASK_EXTRACTION_MAX_TOKENS = 300
+
+# Cost tracking and pricing (Azure OpenAI as of Oct 2025)
+AZURE_OPENAI_PRICING = {
+    "gpt-4o": {
+        "input": 0.03 / 1000,   # $0.03 per 1K input tokens
+        "output": 0.06 / 1000,  # $0.06 per 1K output tokens
+    },
+    "gpt-4o-mini": {
+        "input": 0.0015 / 1000,  # $0.0015 per 1K input tokens
+        "output": 0.006 / 1000,  # $0.006 per 1K output tokens
+    },
+    "gpt-4": {
+        "input": 0.03 / 1000,
+        "output": 0.06 / 1000,
+    },
+    "gpt-35-turbo": {
+        "input": 0.0015 / 1000,
+        "output": 0.002 / 1000,
+    }
+}

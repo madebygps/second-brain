@@ -6,6 +6,7 @@ import time
 from .entry_manager import DiaryEntry, EntryManager
 from .llm_client import LLMClient
 from .llm_analysis import _truncate_text
+from .logging_config import log_operation_timing
 from .constants import (
     DAILY_PROMPT_COUNT,
     WEEKLY_PROMPT_COUNT,
@@ -58,7 +59,8 @@ def is_sunday(entry_date: date) -> bool:
 
 def generate_daily_prompts(
     recent_entries: List[DiaryEntry],
-    llm_client: LLMClient
+    llm_client: LLMClient,
+    target_date: date
 ) -> List[str]:
     """Generate 3 daily reflection prompts based on recent entries.
     
@@ -68,6 +70,7 @@ def generate_daily_prompts(
     Args:
         recent_entries: List of recent diary entries for context (typically 3 days)
         llm_client: LLM client for prompt generation
+        target_date: The date for which prompts are being generated
         
     Returns:
         List of 3 reflection prompt strings with [[YYYY-MM-DD]] backlinks
@@ -143,8 +146,10 @@ Each prompt MUST include at least one [[YYYY-MM-DD]] backlink."""
         response = llm_client.generate_sync(
             prompt=user_prompt,
             system=system_prompt,
-            temperature=0.9,  # Higher temperature for more diversity
-            max_tokens=PROMPT_MAX_TOKENS
+            temperature=0.9,  # Higher temperature for diversity
+            max_tokens=PROMPT_MAX_TOKENS,
+            operation="daily_prompts",
+            entry_date=target_date.strftime("%Y-%m-%d")
         )
         elapsed = time.time() - start_time
 
@@ -153,17 +158,17 @@ Each prompt MUST include at least one [[YYYY-MM-DD]] backlink."""
 
         # Ensure we have exactly the right number of prompts
         if len(prompts) >= DAILY_PROMPT_COUNT:
-            logger.info(f"Generated {DAILY_PROMPT_COUNT} daily prompts in {elapsed:.2f}s")
+            logger.debug(f"Generated {DAILY_PROMPT_COUNT} daily prompts in {elapsed:.2f}s")
             return prompts[:DAILY_PROMPT_COUNT]
         elif prompts:
             # If we got some but not enough, pad with generic ones
             while len(prompts) < DAILY_PROMPT_COUNT:
                 prompts.append("What else is on your mind?")
-            logger.info(f"Generated {len(prompts)} daily prompts (padded) in {elapsed:.2f}s")
+            logger.debug(f"Generated {len(prompts)} daily prompts (padded) in {elapsed:.2f}s")
             return prompts
         else:
             # Fall back to generic prompts if parsing failed
-            logger.warning(f"Failed to parse LLM response in {elapsed:.2f}s, using generic prompts")
+            logger.debug(f"Failed to parse LLM response in {elapsed:.2f}s, using generic prompts")
             return [
                 "What stood out to you recently?",
                 "What are you thinking about?",
@@ -182,7 +187,8 @@ Each prompt MUST include at least one [[YYYY-MM-DD]] backlink."""
 
 def generate_weekly_prompts(
     recent_entries: List[DiaryEntry],
-    llm_client: LLMClient
+    llm_client: LLMClient,
+    target_date: date
 ) -> List[str]:
     """Generate 5 weekly reflection prompts based on past week.
     
@@ -255,7 +261,8 @@ Ensure maximum diversity - cover different life areas, NOT the same topic 5 time
             prompt=user_prompt,
             system=system_prompt,
             temperature=PROMPT_TEMPERATURE,
-            max_tokens=WEEKLY_PROMPT_MAX_TOKENS
+            max_tokens=WEEKLY_PROMPT_MAX_TOKENS,
+            operation="weekly_prompts"
         )
         elapsed = time.time() - start_time
 
@@ -264,15 +271,15 @@ Ensure maximum diversity - cover different life areas, NOT the same topic 5 time
 
         # Ensure we have exactly the right number of prompts
         if len(prompts) >= WEEKLY_PROMPT_COUNT:
-            logger.info(f"Generated {WEEKLY_PROMPT_COUNT} weekly prompts in {elapsed:.2f}s")
+            logger.debug(f"Generated {WEEKLY_PROMPT_COUNT} weekly prompts in {elapsed:.2f}s")
             return prompts[:WEEKLY_PROMPT_COUNT]
         elif prompts:
             while len(prompts) < WEEKLY_PROMPT_COUNT:
                 prompts.append("What else comes to mind?")
-            logger.info(f"Generated {len(prompts)} weekly prompts (padded) in {elapsed:.2f}s")
+            logger.debug(f"Generated {len(prompts)} weekly prompts (padded) in {elapsed:.2f}s")
             return prompts
         else:
-            logger.warning(f"Failed to parse LLM response in {elapsed:.2f}s, using generic prompts")
+            logger.debug(f"Failed to parse LLM response in {elapsed:.2f}s, using generic prompts")
             return [
                 "What were the key themes this week?",
                 "What did you accomplish?",
@@ -319,6 +326,6 @@ def generate_prompts_for_date(
         # For Sunday, look back for weekly context
         past_week_dates = entry_manager.get_past_calendar_days(target_date, WEEKLY_CONTEXT_DAYS)
         week_entries = entry_manager.get_entries_for_dates(past_week_dates)
-        return generate_weekly_prompts(week_entries, llm_client)
+        return generate_weekly_prompts(week_entries, llm_client, target_date)
     else:
-        return generate_daily_prompts(recent_entries, llm_client)
+        return generate_daily_prompts(recent_entries, llm_client, target_date)

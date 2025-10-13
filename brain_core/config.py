@@ -21,6 +21,9 @@ class Config:
         AZURE_OPENAI_DEPLOYMENT: Azure OpenAI deployment name (default: "gpt-4o")
         AZURE_OPENAI_API_VERSION: Azure OpenAI API version (default: "2024-02-15-preview")
         AZURE_SEARCH_INDEX_NAME: Search index name (default: "second-brain-notes")
+        BRAIN_COST_DB_PATH: Path to cost tracking database (default: ~/.brain/costs.db)
+        BRAIN_LOG_LEVEL: Logging level - DEBUG, INFO, WARNING, ERROR (default: INFO)
+        BRAIN_LOG_FILE: Path to log file (optional, logs to console if not set)
     """
 
     def __init__(self, env_file: Optional[Path] = None, validate_paths: bool = True):
@@ -78,6 +81,15 @@ class Config:
         self.azure_search_endpoint = azure_search_endpoint
         self.azure_search_api_key = azure_search_api_key
         self.azure_search_index_name = os.getenv("AZURE_SEARCH_INDEX_NAME", "second-brain-notes")
+        
+        # Cost tracking configuration (optional)
+        self.cost_db_path = os.getenv("BRAIN_COST_DB_PATH")  # Default handled in CostTracker
+        
+        # Logging configuration (optional)
+        self.log_level = os.getenv("BRAIN_LOG_LEVEL", "INFO")
+        self.log_file = os.getenv("BRAIN_LOG_FILE")  # Optional file logging
+        
+
 
 
 @lru_cache(maxsize=1)

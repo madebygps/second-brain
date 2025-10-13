@@ -23,6 +23,20 @@ AI-powered journaling with semantic backlinks and intelligent book notes search.
 - Rich formatted results
 - **Requires Azure AI Search** (no local alternative)
 
+**Cost Tracking:**
+- Real-time Azure OpenAI usage tracking
+- Local SQLite database storage
+- Cost summaries, trends, and projections
+- Per-operation breakdowns (diary, planning, analysis)
+- Export to CSV for billing analysis
+
+**Logging:**
+- Rich-formatted colored console output
+- Clean UX with smart log suppression (no interruptions during spinners)
+- Multiple verbosity levels (--verbose, --debug)
+- File and console output options
+- Suppressed noisy third-party HTTP logs
+
 **LLM Support:**
 - Azure OpenAI - Full functionality for all commands
 
@@ -68,8 +82,22 @@ uv run brain notes search "topic"     # Search book notes
 uv run brain notes search "topic" --semantic --detailed
 uv run brain notes status             # Check connection
 
+# Cost tracking and analysis
+uv run brain cost summary             # Usage summary for last 30 days
+uv run brain cost trends 30           # Daily cost trends
+uv run brain cost estimate            # Monthly cost projection
+uv run brain cost breakdown           # Per-operation breakdown
+uv run brain cost export data.json    # Export to JSON
+uv run brain cost pricing             # Show pricing
 
+# Logging (Rich-formatted, colored output)
+uv run brain --verbose <command>      # Show key operations
+uv run brain --debug <command>        # Full diagnostics with LLM details
 ```
+
+> **Clean UX:** By default, logs are suppressed during operations to avoid interrupting spinners. Use `--verbose` or `--debug` for detailed information with beautiful Rich formatting.
+
+> **Cost Tracking:** All Azure OpenAI usage is automatically tracked in a local SQLite database (`~/.brain/costs.db`). Data stays private and grows ~10-50 MB/year for typical use.
 
 ## Configuration
 
@@ -87,6 +115,21 @@ uv run brain notes status             # Check connection
 - `AZURE_SEARCH_ENDPOINT` - Azure AI Search service endpoint
 - `AZURE_SEARCH_API_KEY` - Azure AI Search API key
 - `AZURE_SEARCH_INDEX_NAME` - Search index name (default: second-brain-notes)
+
+**Cost Tracking** (optional configuration):
+- `BRAIN_COST_DB_PATH` - Path to cost tracking database (default: ~/.brain/costs.db)
+- `BRAIN_LOG_LEVEL` - Logging level: DEBUG, INFO, WARNING, ERROR (default: INFO)
+- `BRAIN_LOG_FILE` - Path to log file (optional, logs to console if not set)
+
+**Custom Pricing** (optional - override Azure OpenAI pricing):
+- `AZURE_GPT4O_INPUT_PRICE` - Price per 1K input tokens for gpt-4o (default: 0.03)
+- `AZURE_GPT4O_OUTPUT_PRICE` - Price per 1K output tokens for gpt-4o (default: 0.06)
+- `AZURE_GPT4O_MINI_INPUT_PRICE` - Price per 1K input tokens for gpt-4o-mini (default: 0.0015)
+- `AZURE_GPT4O_MINI_OUTPUT_PRICE` - Price per 1K output tokens for gpt-4o-mini (default: 0.006)
+- `AZURE_GPT4_INPUT_PRICE` - Price per 1K input tokens for gpt-4 (default: 0.03)
+- `AZURE_GPT4_OUTPUT_PRICE` - Price per 1K output tokens for gpt-4 (default: 0.06)
+- `AZURE_GPT35_TURBO_INPUT_PRICE` - Price per 1K input tokens for gpt-35-turbo (default: 0.0015)
+- `AZURE_GPT35_TURBO_OUTPUT_PRICE` - Price per 1K output tokens for gpt-35-turbo (default: 0.002)
 
 ## Entry Format
 
@@ -146,6 +189,8 @@ uv run pytest                    # Run all tests
 uv run pytest --cov              # Run with coverage
 uv run pytest tests/brain_core/  # Run specific module
 ```
+
+**Coverage**: 74 tests with 45% overall coverage, 96% on critical paths (plan_commands.py)
 
 ## License
 
