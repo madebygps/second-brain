@@ -34,3 +34,35 @@ dev = [
     "pytest-mock>=3.15.1",
     "ruff>=0.14.0",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+# Enable carefully selected rule sets for personal project
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "UP",  # pyupgrade (modernize Python code)
+]
+
+# Ignore rules that are too strict for personal project
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use assert
+"tests/**/*.py" = ["S101"]
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces
+indent-style = "space"
+
+# Respect magic trailing comma
+skip-magic-trailing-comma = false

@@ -210,3 +210,6 @@ __marimo__/
 htmlcov/
 .coverage
 .pytest_cache/
+
+# Cost tracking database (contains usage data)
+cost.json
