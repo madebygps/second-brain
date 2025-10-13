@@ -1,7 +1,7 @@
 """Constants used throughout the diary system."""
 
 # Entry content thresholds
-MIN_SUBSTANTIAL_CONTENT_CHARS = 50
+MIN_SUBSTANTIAL_CONTENT_CHARS = 1
 
 # LLM Analysis limits
 MAX_SEMANTIC_LINK_CANDIDATES = 20  # Max number of candidate entries to compare
@@ -23,7 +23,7 @@ LLM_TIMEOUT_SECONDS = 300.0  # 5 minutes
 LLM_CONNECTION_CHECK_TIMEOUT = 5.0
 
 # Prompt generation
-DAILY_PROMPT_COUNT = 3
+DAILY_PROMPT_COUNT = 1
 WEEKLY_PROMPT_COUNT = 5
 PROMPT_CONTEXT_DAYS = 3
 WEEKLY_CONTEXT_DAYS = 7
