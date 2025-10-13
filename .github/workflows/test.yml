@@ -31,7 +31,7 @@ jobs:
 
     - name: Check test count
       run: |
-        TEST_COUNT=$(uv run pytest tests/ --collect-only -q | grep -c "test_")
+        TEST_COUNT=$(uv run pytest tests/ --collect-only -q | grep "<Function test_" | wc -l | tr -d ' ')
         echo "Found $TEST_COUNT tests"
         if [ "$TEST_COUNT" -ne 7 ]; then
           echo "Expected 7 tests, found $TEST_COUNT"
