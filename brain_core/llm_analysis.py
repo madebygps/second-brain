@@ -1,28 +1,29 @@
 """LLM-powered analysis for semantic backlinks and tags."""
-from typing import List, Dict, Literal, cast
-from dataclasses import dataclass
+
 import json
 import logging
 import time
-from .entry_manager import DiaryEntry
-from .llm_client import LLMClient
-from .logging_config import log_operation_timing
+from dataclasses import dataclass
+from typing import Literal, cast
+
 from .constants import (
+    ENTITY_EXTRACTION_MAX_TOKENS,
+    ENTRY_PREVIEW_LENGTH,
+    MAX_ENTRIES_FOR_TAG_CONTEXT,
     MAX_SEMANTIC_LINK_CANDIDATES,
     MAX_SEMANTIC_LINKS,
-    MAX_TOPIC_TAGS,
-    MAX_ENTRIES_FOR_TAG_CONTEXT,
-    ENTRY_PREVIEW_LENGTH,
-    TARGET_PREVIEW_LENGTH,
-    SEMANTIC_TEMPERATURE,
-    TAG_TEMPERATURE,
-    TAG_MAX_TOKENS,
-    MIN_TAG_LENGTH,
     MAX_TAG_LENGTH,
+    MAX_TOPIC_TAGS,
     MIN_CONTENT_FOR_ENTITY_EXTRACTION,
-    ENTITY_EXTRACTION_MAX_TOKENS,
-    SEMANTIC_BACKLINKS_MAX_TOKENS
+    MIN_TAG_LENGTH,
+    SEMANTIC_BACKLINKS_MAX_TOKENS,
+    SEMANTIC_TEMPERATURE,
+    TAG_MAX_TOKENS,
+    TAG_TEMPERATURE,
+    TARGET_PREVIEW_LENGTH,
 )
+from .entry_manager import DiaryEntry
+from .llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -30,29 +31,25 @@ logger = logging.getLogger(__name__)
 ConfidenceLevel = Literal["high", "medium", "low"]
 
 # Empty entity dict for consistent returns
-EMPTY_ENTITIES: Dict[str, List[str]] = {
-    "people": [],
-    "places": [],
-    "projects": [],
-    "themes": []
-}
+EMPTY_ENTITIES: dict[str, list[str]] = {"people": [], "places": [], "projects": [], "themes": []}
 
 
 @dataclass
 class SemanticLink:
     """Represents a semantic link with metadata."""
+
     target_date: str
     confidence: ConfidenceLevel
     reason: str
-    entities: List[str]
+    entities: list[str]
 
 
 def _clean_json_response(response: str) -> str:
     """Remove markdown code blocks from LLM JSON responses.
-    
+
     Args:
         response: Raw LLM response that may contain markdown formatting
-        
+
     Returns:
         Cleaned response string ready for JSON parsing
     """
@@ -65,49 +62,47 @@ def _clean_json_response(response: str) -> str:
 
 def _truncate_text(text: str, max_length: int) -> str:
     """Truncate text to max_length if needed.
-    
+
     Args:
         text: Text to truncate
         max_length: Maximum length in characters
-        
+
     Returns:
         Original text if shorter than max_length, otherwise truncated text
     """
     return text[:max_length] if len(text) > max_length else text
 
 
-def _validate_entities(entities: Dict[str, List[str]]) -> Dict[str, List[str]]:
+def _validate_entities(entities: dict[str, list[str]]) -> dict[str, list[str]]:
     """Validate and clean entity extraction results.
-    
+
     Args:
         entities: Raw entity dictionary from LLM
-        
+
     Returns:
         Validated entity dictionary with required keys and clean values
     """
     required_keys = {"people", "places", "projects", "themes"}
     validated = {}
-    
+
     for key in required_keys:
         if key not in entities or not isinstance(entities[key], list):
             validated[key] = []
         else:
             # Filter out empty strings and ensure all are strings
             validated[key] = [
-                str(item).strip() 
-                for item in entities[key] 
-                if item and str(item).strip()
+                str(item).strip() for item in entities[key] if item and str(item).strip()
             ]
-    
+
     return validated
 
 
 def _validate_confidence(confidence: str) -> ConfidenceLevel:
     """Validate and normalize confidence level.
-    
+
     Args:
         confidence: Raw confidence string from LLM
-        
+
     Returns:
         Valid confidence level, defaulting to 'medium' if invalid
     """
@@ -117,16 +112,13 @@ def _validate_confidence(confidence: str) -> ConfidenceLevel:
     return "medium"
 
 
-def extract_entities(
-    entry: DiaryEntry,
-    llm_client: LLMClient
-) -> Dict[str, List[str]]:
+def extract_entities(entry: DiaryEntry, llm_client: LLMClient) -> dict[str, list[str]]:
     """Extract people, places, projects, and themes from an entry.
-    
+
     Args:
         entry: Diary entry to analyze
         llm_client: LLM client for generation
-        
+
     Returns:
         Dictionary with keys: people, places, projects, themes (all lists of strings)
     """
@@ -160,7 +152,7 @@ Return JSON only (no explanations):"""
             temperature=0.2,
             max_tokens=ENTITY_EXTRACTION_MAX_TOKENS,
             operation="entity_extraction",
-            entry_date=entry.date
+            entry_date=entry.date,
         )
         elapsed = time.time() - start_time
 
@@ -172,9 +164,9 @@ Return JSON only (no explanations):"""
         if not isinstance(entities, dict):
             logger.warning(f"Entry {entry.date}: Invalid entity extraction response type")
             return EMPTY_ENTITIES.copy()
-        
+
         validated_entities = _validate_entities(entities)
-        
+
         logger.debug(
             f"Entry {entry.date}: Extracted entities in {elapsed:.2f}s - "
             f"people: {len(validated_entities['people'])}, "
@@ -182,7 +174,7 @@ Return JSON only (no explanations):"""
             f"projects: {len(validated_entities['projects'])}, "
             f"themes: {len(validated_entities['themes'])}"
         )
-        
+
         return validated_entities
 
     except json.JSONDecodeError as e:
@@ -195,27 +187,27 @@ Return JSON only (no explanations):"""
 
 def generate_semantic_backlinks(
     target_entry: DiaryEntry,
-    candidate_entries: List[DiaryEntry],
+    candidate_entries: list[DiaryEntry],
     llm_client: LLMClient,
-    max_links: int = MAX_SEMANTIC_LINKS
-) -> List[SemanticLink]:
+    max_links: int = MAX_SEMANTIC_LINKS,
+) -> list[SemanticLink]:
     """Use LLM to find semantically related entries with confidence scores and entity extraction.
-    
+
     Args:
         target_entry: The entry to find connections for
         candidate_entries: Potential entries to link to
         llm_client: LLM client for generation
         max_links: Maximum number of links to return (must be positive)
-        
+
     Returns:
         List of SemanticLink objects with metadata
-        
+
     Raises:
         ValueError: If max_links is not positive
     """
     if max_links <= 0:
         raise ValueError(f"max_links must be positive, got {max_links}")
-    
+
     if not candidate_entries:
         logger.debug(f"Entry {target_entry.date}: No candidate entries for backlink generation")
         return []
@@ -287,7 +279,7 @@ Which candidates are semantically related? Return JSON array only (no explanatio
             temperature=SEMANTIC_TEMPERATURE,
             max_tokens=SEMANTIC_BACKLINKS_MAX_TOKENS,
             operation="semantic_backlinks",
-            entry_date=target_entry.date
+            entry_date=target_entry.date,
         )
         elapsed = time.time() - start_time
 
@@ -304,29 +296,31 @@ Which candidates are semantically related? Return JSON array only (no explanatio
         for link in links_data[:max_links]:
             if not isinstance(link, dict) or "date" not in link:
                 continue
-                
+
             # Validate and clean entities
             entities = link.get("entities", [])
             if not isinstance(entities, list):
                 entities = []
             else:
                 entities = [e for e in entities if e]
-            
+
             # Validate confidence level
             confidence = _validate_confidence(link.get("confidence", "medium"))
-            
-            semantic_links.append(SemanticLink(
-                target_date=link.get("date", ""),
-                confidence=confidence,
-                reason=link.get("reason", ""),
-                entities=entities
-            ))
+
+            semantic_links.append(
+                SemanticLink(
+                    target_date=link.get("date", ""),
+                    confidence=confidence,
+                    reason=link.get("reason", ""),
+                    entities=entities,
+                )
+            )
 
         logger.info(
             f"Entry {target_entry.date}: Generated {len(semantic_links)} semantic backlinks "
             f"in {elapsed:.2f}s from {len(candidate_context)} candidates"
         )
-        
+
         return semantic_links
 
     except json.JSONDecodeError as e:
@@ -338,26 +332,24 @@ Which candidates are semantically related? Return JSON array only (no explanatio
 
 
 def generate_semantic_tags(
-    entries: List[DiaryEntry],
-    llm_client: LLMClient,
-    max_tags: int = MAX_TOPIC_TAGS
-) -> List[str]:
+    entries: list[DiaryEntry], llm_client: LLMClient, max_tags: int = MAX_TOPIC_TAGS
+) -> list[str]:
     """Use LLM to generate semantic topic tags.
-    
+
     Args:
         entries: List of diary entries to analyze
         llm_client: LLM client for generation
         max_tags: Maximum number of tags to return (must be positive)
-        
+
     Returns:
         List of lowercase tag strings (without # prefix)
-        
+
     Raises:
         ValueError: If max_tags is not positive
     """
     if max_tags <= 0:
         raise ValueError(f"max_tags must be positive, got {max_tags}")
-    
+
     if not entries:
         logger.debug("No entries provided for tag generation")
         return []
@@ -414,7 +406,7 @@ Return only the tags (one per line, with # prefix), focusing on themes over topi
             temperature=TAG_TEMPERATURE,
             max_tokens=TAG_MAX_TOKENS,
             operation="semantic_tags",
-            entry_date=entries[0].date if entries else None
+            entry_date=entries[0].date if entries else None,
         )
         elapsed = time.time() - start_time
 
@@ -423,18 +415,18 @@ Return only the tags (one per line, with # prefix), focusing on themes over topi
         for line in response.split("\n"):
             # Remove # prefix if present and clean the tag
             tag = line.strip().lstrip("#").lower()
-            
+
             # Validate tag length and content
             if MIN_TAG_LENGTH <= len(tag) <= MAX_TAG_LENGTH and tag:
                 tags.append(tag)
 
         result_tags = tags[:max_tags]
-        
+
         logger.info(
             f"Generated {len(result_tags)} semantic tags in {elapsed:.2f}s "
             f"from {len(entries)} entries"
         )
-        
+
         return result_tags
 
     except RuntimeError as e:

@@ -1,9 +1,10 @@
 """Notes management and search commands."""
+
 import typer
 from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
 from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.table import Table
 
 from brain_core.config import get_azure_search_client
 
@@ -21,10 +22,10 @@ TABLE_COL_WIDTH_SCORE = 7
 
 def check_search_connection(search_client) -> bool:
     """Check Azure Search connection and display error if unavailable.
-    
+
     Args:
         search_client: Azure Search client instance to check
-        
+
     Returns:
         True if connection successful, False otherwise
     """
@@ -38,11 +39,11 @@ def check_search_connection(search_client) -> bool:
 
 def create_result_preview(content: str, max_length: int = PREVIEW_LENGTH) -> str:
     """Create a preview string from content.
-    
+
     Args:
         content: Full content text
         max_length: Maximum length of preview
-        
+
     Returns:
         Truncated preview string with ellipsis if needed
     """
@@ -55,9 +56,13 @@ def create_result_preview(content: str, max_length: int = PREVIEW_LENGTH) -> str
 @app.command()
 def search(
     query: str = typer.Argument(..., help="Search query (e.g., 'notes on discipline')"),
-    top: int = typer.Option(DEFAULT_TOP_RESULTS, "--top", "-n", help="Maximum number of results to return"),
-    semantic: bool = typer.Option(False, "--semantic", "-s", help="Use semantic search (slower but more relevant)"),
-    detailed: bool = typer.Option(False, "--detailed", "-d", help="Show full content of results")
+    top: int = typer.Option(
+        DEFAULT_TOP_RESULTS, "--top", "-n", help="Maximum number of results to return"
+    ),
+    semantic: bool = typer.Option(
+        False, "--semantic", "-s", help="Use semantic search (slower but more relevant)"
+    ),
+    detailed: bool = typer.Option(False, "--detailed", "-d", help="Show full content of results"),
 ):
     """Search book notes using Azure AI Search.
 
@@ -89,7 +94,9 @@ def search(
             return
 
         # Display results
-        console.print(f"\n[bold cyan]{search_type} Search Results[/bold cyan] for: [bold]'{query}'[/bold]")
+        console.print(
+            f"\n[bold cyan]{search_type} Search Results[/bold cyan] for: [bold]'{query}'[/bold]"
+        )
         console.print(f"[dim]Found {len(results)} result(s)[/dim]\n")
 
         if detailed:
@@ -99,7 +106,9 @@ def search(
                 panel_content = f"**Book:** {result.title}\n"
                 panel_content += f"**Category:** {result.category}\n"
                 panel_content += f"**Source:** {result.source}\n"
-                panel_content += f"**Score:** {result.score:.2f} | **Words:** {result.word_count}\n\n"
+                panel_content += (
+                    f"**Score:** {result.score:.2f} | **Words:** {result.word_count}\n\n"
+                )
                 panel_content += "---\n\n"
                 panel_content += result.content
 
@@ -107,7 +116,7 @@ def search(
                     Markdown(panel_content),
                     title=f"[bold cyan]{i}. Note from {result.title}[/bold cyan]",
                     border_style="cyan",
-                    expand=False
+                    expand=False,
                 )
                 console.print(panel)
                 console.print()  # Add spacing between results
@@ -130,7 +139,7 @@ def search(
                     result.category,
                     str(result.word_count),
                     f"{result.score:.2f}",
-                    preview
+                    preview,
                 )
 
             console.print(table)

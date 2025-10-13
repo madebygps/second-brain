@@ -1,5 +1,5 @@
 """Unified LLM client interface for Azure OpenAI."""
-from typing import Optional
+
 from abc import ABC, abstractmethod
 
 
@@ -10,14 +10,14 @@ class LLMClient(ABC):
     def generate_sync(
         self,
         prompt: str,
-        system: Optional[str] = None,
+        system: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         operation: str = "generate",
-        entry_date: Optional[str] = None
+        entry_date: str | None = None,
     ) -> str:
         """Generate text synchronously.
-        
+
         Args:
             prompt: User prompt text
             system: System message (optional)
@@ -25,7 +25,7 @@ class LLMClient(ABC):
             max_tokens: Maximum tokens to generate
             operation: Type of operation for tracking (e.g., 'task_extraction', 'semantic_backlinks')
             entry_date: Date of diary entry being processed (YYYY-MM-DD format)
-            
+
         Returns:
             Generated text response
         """

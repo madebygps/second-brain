@@ -1,0 +1,48 @@
+# Pre-commit hooks for code quality (minimal setup for personal project)
+# Install: uv run pre-commit install
+# Run manually: uv run pre-commit run --all-files
+#
+# Using pre-commit.ci for automatic PR fixes and weekly updates
+# See: https://pre-commit.ci
+
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from hooks
+
+    for more info, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_schedule: weekly
+  skip: [pytest]  # Skip pytest in CI (runs in GitHub Actions instead)
+
+repos:
+  # Ruff - Fast Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      # Run the linter with auto-fix
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      # Run the formatter
+      - id: ruff-format
+
+  # Basic file checks (auto-fix)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+
+  # Run tests before commit (local only, skipped in pre-commit.ci)
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest tests/ -v
+        language: system
+        pass_filenames: false
+        always_run: true

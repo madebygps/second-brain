@@ -1,8 +1,9 @@
 """Manage diary entry files (read/write markdown)."""
-from pathlib import Path
-from datetime import date, datetime, timedelta
-from typing import Optional, List
+
 import re
+from datetime import date, timedelta
+from pathlib import Path
+
 from .constants import MIN_SUBSTANTIAL_CONTENT_CHARS
 
 
@@ -13,9 +14,9 @@ class DiaryEntry:
         self.date = entry_date
         self.content = content
         self.entry_type = entry_type  # "reflection" or "plan"
-        self._reflection_prompts: Optional[str] = None
-        self._brain_dump: Optional[str] = None
-        self._memory_links: Optional[str] = None
+        self._reflection_prompts: str | None = None
+        self._brain_dump: str | None = None
+        self._memory_links: str | None = None
 
     @property
     def filename(self) -> str:
@@ -28,28 +29,20 @@ class DiaryEntry:
         """Parse content into sections."""
         # Extract Reflection Prompts section
         reflection_match = re.search(
-            r"## Reflection Prompts\n(.*?)(?=\n---|\n##|$)",
-            self.content,
-            re.DOTALL
+            r"## Reflection Prompts\n(.*?)(?=\n---|\n##|$)", self.content, re.DOTALL
         )
         if reflection_match:
             self._reflection_prompts = reflection_match.group(1).strip()
 
         # Extract Brain Dump section
         brain_dump_match = re.search(
-            r"## Brain Dump\n(.*?)(?=\n---|\n##|$)",
-            self.content,
-            re.DOTALL
+            r"## Brain Dump\n(.*?)(?=\n---|\n##|$)", self.content, re.DOTALL
         )
         if brain_dump_match:
             self._brain_dump = brain_dump_match.group(1).strip()
 
         # Extract Memory Links section
-        memory_links_match = re.search(
-            r"## Memory Links\n(.*?)$",
-            self.content,
-            re.DOTALL
-        )
+        memory_links_match = re.search(r"## Memory Links\n(.*?)$", self.content, re.DOTALL)
         if memory_links_match:
             self._memory_links = memory_links_match.group(1).strip()
 
@@ -65,11 +58,11 @@ class DiaryEntry:
         """Check if entry has substantial content in brain dump."""
         return len(self.brain_dump) > MIN_SUBSTANTIAL_CONTENT_CHARS
 
-    def get_backlinks(self) -> List[str]:
+    def get_backlinks(self) -> list[str]:
         """Extract all [[backlinks]] from content."""
         return re.findall(r"\[\[([^\]]+)\]\]", self.content)
 
-    def get_tags(self) -> List[str]:
+    def get_tags(self) -> list[str]:
         """Extract all #tags from content."""
         return re.findall(r"#(\w+)", self.content)
 
@@ -77,7 +70,7 @@ class DiaryEntry:
 class EntryManager:
     """Manage reading and writing diary entries."""
 
-    def __init__(self, diary_path: Path, planner_path: Optional[Path] = None):
+    def __init__(self, diary_path: Path, planner_path: Path | None = None):
         self.diary_path = diary_path
         self.planner_path = planner_path if planner_path else diary_path
 
@@ -94,7 +87,7 @@ class EntryManager:
         """Check if entry exists for given date and type."""
         return self.get_entry_path(entry_date, entry_type).exists()
 
-    def read_entry(self, entry_date: date, entry_type: str = "reflection") -> Optional[DiaryEntry]:
+    def read_entry(self, entry_date: date, entry_type: str = "reflection") -> DiaryEntry | None:
         """Read diary entry for given date and type."""
         path = self.get_entry_path(entry_date, entry_type)
         if not path.exists():
@@ -108,11 +101,7 @@ class EntryManager:
         path = self.get_entry_path(entry.date, entry.entry_type)
         path.write_text(entry.content, encoding="utf-8")
 
-    def create_entry_template(
-        self,
-        entry_date: date,
-        prompts: List[str]
-    ) -> DiaryEntry:
+    def create_entry_template(self, entry_date: date, prompts: list[str]) -> DiaryEntry:
         """Create a new entry with template structure (prompts + brain dump only)."""
         sections = []
 
@@ -132,10 +121,7 @@ class EntryManager:
         return DiaryEntry(entry_date, content)
 
     def create_plan_template(
-        self,
-        entry_date: date,
-        prompts: List[str],
-        pending_todos: List[str] = None
+        self, entry_date: date, prompts: list[str], pending_todos: list[str] = None
     ) -> DiaryEntry:
         """Create a new plan entry with template structure."""
         sections = []
@@ -166,7 +152,7 @@ class EntryManager:
         content = "\n".join(sections)
         return DiaryEntry(entry_date, content, entry_type="plan")
 
-    def list_entries(self, days: int = 30) -> List[DiaryEntry]:
+    def list_entries(self, days: int = 30) -> list[DiaryEntry]:
         """List recent entries (up to N days back)."""
         entries = []
         today = date.today()
@@ -189,14 +175,14 @@ class EntryManager:
 
         return entries
 
-    def get_past_calendar_days(self, from_date: date, num_days: int) -> List[date]:
+    def get_past_calendar_days(self, from_date: date, num_days: int) -> list[date]:
         """Get past N calendar days (not last N entries)."""
         dates = []
         for i in range(1, num_days + 1):
             dates.append(from_date - timedelta(days=i))
         return dates
 
-    def get_entries_for_dates(self, dates: List[date]) -> List[DiaryEntry]:
+    def get_entries_for_dates(self, dates: list[date]) -> list[DiaryEntry]:
         """Get entries for specific dates (only existing ones)."""
         entries = []
         for entry_date in dates:
@@ -208,9 +194,9 @@ class EntryManager:
     def update_memory_links(
         self,
         entry: DiaryEntry,
-        temporal_links: List[str],
-        topic_tags: List[str],
-        link_metadata: dict = None
+        temporal_links: list[str],
+        topic_tags: list[str],
+        link_metadata: dict = None,
     ) -> DiaryEntry:
         """Update the Memory Links section of an entry.
 
@@ -235,11 +221,9 @@ class EntryManager:
 
                     link_str = f"- [[{link}]]"
                     if confidence:
-                        confidence_marker = {
-                            "high": "**",
-                            "medium": "*",
-                            "low": "~"
-                        }.get(confidence, "*")
+                        confidence_marker = {"high": "**", "medium": "*", "low": "~"}.get(
+                            confidence, "*"
+                        )
                         link_str += f" {confidence_marker}"
                     if reason:
                         link_str += f" *{reason}*"
@@ -260,10 +244,7 @@ class EntryManager:
         if "## Memory Links" in entry.content:
             # Replace existing section
             new_content = re.sub(
-                r"## Memory Links\n.*$",
-                new_memory_section,
-                entry.content,
-                flags=re.DOTALL
+                r"## Memory Links\n.*$", new_memory_section, entry.content, flags=re.DOTALL
             )
         else:
             # Append new section
@@ -273,12 +254,12 @@ class EntryManager:
         return entry
 
 
-def extract_todos(entry: DiaryEntry) -> List[str]:
+def extract_todos(entry: DiaryEntry) -> list[str]:
     """Extract action items/todos from entry content using regex patterns.
-    
+
     Args:
         entry: Diary entry to extract todos from
-        
+
     Returns:
         List of todo strings found in the entry
     """
@@ -286,10 +267,10 @@ def extract_todos(entry: DiaryEntry) -> List[str]:
 
     # Look for common todo patterns
     patterns = [
-        r'(?:^|\n)[-*•]\s*(?:TODO|To do|Action):\s*(.+?)(?:\n|$)',  # - TODO: item
-        r'(?:^|\n)[-*•]\s*\[ \]\s*(.+?)(?:\n|$)',  # - [ ] item (checkbox)
-        r'(?:^|\n)(?:TODO|To do|Action):\s*(.+?)(?:\n|$)',  # TODO: item
-        r'(?:^|\n)(?:I need to|I should|I must|I will)\s+(.+?)(?:\.|$)',  # Natural language
+        r"(?:^|\n)[-*•]\s*(?:TODO|To do|Action):\s*(.+?)(?:\n|$)",  # - TODO: item
+        r"(?:^|\n)[-*•]\s*\[ \]\s*(.+?)(?:\n|$)",  # - [ ] item (checkbox)
+        r"(?:^|\n)(?:TODO|To do|Action):\s*(.+?)(?:\n|$)",  # TODO: item
+        r"(?:^|\n)(?:I need to|I should|I must|I will)\s+(.+?)(?:\.|$)",  # Natural language
     ]
 
     content = entry.content

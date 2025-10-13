@@ -1,14 +1,15 @@
 """Configuration management for diary system."""
-from pathlib import Path
-from typing import Optional
-from functools import lru_cache
-from dotenv import load_dotenv
+
 import os
+from functools import lru_cache
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 
 class Config:
     """Configuration loaded from .env file.
-    
+
     Required environment variables:
         DIARY_PATH: Path to Obsidian vault or markdown directory
         PLANNER_PATH: Path to planner directory for extracted todos
@@ -16,7 +17,7 @@ class Config:
         AZURE_OPENAI_ENDPOINT: Azure OpenAI endpoint URL
         AZURE_SEARCH_ENDPOINT: Azure AI Search service endpoint URL
         AZURE_SEARCH_API_KEY: Azure AI Search API key
-    
+
     Optional environment variables:
         AZURE_OPENAI_DEPLOYMENT: Azure OpenAI deployment name (default: "gpt-4o")
         AZURE_OPENAI_API_VERSION: Azure OpenAI API version (default: "2024-02-15-preview")
@@ -26,7 +27,7 @@ class Config:
         BRAIN_LOG_FILE: Path to log file (optional, logs to console if not set)
     """
 
-    def __init__(self, env_file: Optional[Path] = None, validate_paths: bool = True):
+    def __init__(self, env_file: Path | None = None, validate_paths: bool = True):
         """Load configuration from .env file.
 
         Args:
@@ -61,11 +62,11 @@ class Config:
         self.azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
         if not self.azure_api_key:
             raise ValueError("AZURE_OPENAI_API_KEY must be set in .env")
-            
+
         self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         if not self.azure_endpoint:
             raise ValueError("AZURE_OPENAI_ENDPOINT must be set in .env")
-            
+
         self.azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
         self.azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
 
@@ -73,23 +74,21 @@ class Config:
         azure_search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT")
         if not azure_search_endpoint:
             raise ValueError("AZURE_SEARCH_ENDPOINT must be set in .env")
-        
+
         azure_search_api_key = os.getenv("AZURE_SEARCH_API_KEY")
         if not azure_search_api_key:
             raise ValueError("AZURE_SEARCH_API_KEY must be set in .env")
-        
+
         self.azure_search_endpoint = azure_search_endpoint
         self.azure_search_api_key = azure_search_api_key
         self.azure_search_index_name = os.getenv("AZURE_SEARCH_INDEX_NAME", "second-brain-notes")
-        
+
         # Cost tracking configuration (optional)
         self.cost_db_path = os.getenv("BRAIN_COST_DB_PATH")  # Default handled in CostTracker
-        
+
         # Logging configuration (optional)
         self.log_level = os.getenv("BRAIN_LOG_LEVEL", "INFO")
         self.log_file = os.getenv("BRAIN_LOG_FILE")  # Optional file logging
-        
-
 
 
 @lru_cache(maxsize=1)
@@ -103,7 +102,7 @@ def clear_config_cache() -> None:
     get_config.cache_clear()
 
 
-def get_llm_client(config: Optional[Config] = None):
+def get_llm_client(config: Config | None = None):
     """Get the appropriate LLM client based on configuration.
 
     Args:
@@ -112,7 +111,7 @@ def get_llm_client(config: Optional[Config] = None):
 
     Returns:
         Configured Azure OpenAI LLM client.
-        
+
     Raises:
         ValueError: If Azure OpenAI credentials are not configured.
     """
@@ -126,16 +125,16 @@ def get_llm_client(config: Optional[Config] = None):
             "Azure OpenAI credentials required. Set AZURE_OPENAI_API_KEY and "
             "AZURE_OPENAI_ENDPOINT in .env"
         )
-    
+
     return AzureOpenAIClient(
         api_key=config.azure_api_key,
         endpoint=config.azure_endpoint,
         deployment_name=config.azure_deployment,
-        api_version=config.azure_api_version
+        api_version=config.azure_api_version,
     )
 
 
-def get_azure_search_client(config: Optional[Config] = None):
+def get_azure_search_client(config: Config | None = None):
     """Get the Azure Search client based on configuration.
 
     Args:
@@ -153,5 +152,5 @@ def get_azure_search_client(config: Optional[Config] = None):
     return AzureSearchNotesClient(
         endpoint=config.azure_search_endpoint,
         api_key=config.azure_search_api_key,
-        index_name=config.azure_search_index_name
+        index_name=config.azure_search_index_name,
     )

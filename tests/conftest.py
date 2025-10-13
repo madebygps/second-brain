@@ -1,8 +1,10 @@
 """Shared test fixtures."""
-import pytest
+
+from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from datetime import date
+
+import pytest
 
 
 @pytest.fixture
@@ -22,13 +24,13 @@ def mock_env(monkeypatch, temp_dir):
 
     monkeypatch.setenv("DIARY_PATH", str(diary_path))
     monkeypatch.setenv("PLANNER_PATH", str(planner_path))
-    
+
     # Azure OpenAI configuration (required)
     monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-openai-key")
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com/")
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4")
     monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
-    
+
     # Azure Search configuration (required)
     monkeypatch.setenv("AZURE_SEARCH_ENDPOINT", "https://test.search.windows.net")
     monkeypatch.setenv("AZURE_SEARCH_API_KEY", "test-search-key")

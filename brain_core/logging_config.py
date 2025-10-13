@@ -1,21 +1,22 @@
 """Centralized logging configuration for the brain system."""
+
 import logging
 import os
 from pathlib import Path
-from typing import Optional
-from rich.logging import RichHandler
+
 from rich.console import Console
+from rich.logging import RichHandler
 
 
 def setup_logging(
-    level: str = "INFO", 
-    log_file: Optional[Path] = None, 
+    level: str = "INFO",
+    log_file: Path | None = None,
     console_format: str = "simple",
     enable_file_logging: bool = False,
-    use_config: bool = True
+    use_config: bool = True,
 ) -> None:
     """Configure centralized logging for the brain system.
-    
+
     Args:
         level: Logging level (DEBUG, INFO, WARNING, ERROR)
         log_file: Optional path to log file. If None, logs only to console.
@@ -27,6 +28,7 @@ def setup_logging(
     if use_config:
         try:
             from .config import get_config
+
             config = get_config()
             level = config.log_level
             if config.log_file:
@@ -35,26 +37,25 @@ def setup_logging(
         except Exception:
             # If config loading fails, use provided defaults
             pass
-            
+
     # Determine log level
     if level is None:
         level = os.getenv("LOG_LEVEL", "WARNING").upper()
-    
+
     log_level = getattr(logging, level, logging.WARNING)
-    
+
     # Create file formatter (Rich handles console formatting)
     file_formatter = logging.Formatter(
-        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
-    
+
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
-    
+
     # Clear existing handlers
     root_logger.handlers.clear()
-    
+
     # Console handler with Rich for prettier output
     console = Console(stderr=True)
     console_handler = RichHandler(
@@ -63,23 +64,23 @@ def setup_logging(
         show_path=False,
         markup=True,
         rich_tracebacks=True,
-        tracebacks_show_locals=False
+        tracebacks_show_locals=False,
     )
     console_handler.setLevel(log_level)
     root_logger.addHandler(console_handler)
-    
+
     # File handler (if enabled)
     if enable_file_logging:
         if log_file is None:
             log_dir = Path.home() / ".brain" / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / "brain.log"
-        
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)  # File always captures everything
         file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)
-    
+
     # Configure specific loggers to prevent double logging
     # Suppress noisy third-party loggers
     logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -92,10 +93,10 @@ def setup_logging(
 
 def get_logger(name: str) -> logging.Logger:
     """Get a logger instance for a module.
-    
+
     Args:
         name: Logger name (typically __name__)
-        
+
     Returns:
         Configured logger instance
     """
@@ -120,18 +121,18 @@ def enable_verbose_logging() -> None:
 
 def log_operation_timing(operation: str, elapsed_seconds: float, **kwargs) -> None:
     """Log operation timing with consistent format.
-    
+
     Args:
         operation: Name of the operation
         elapsed_seconds: Time taken in seconds
         **kwargs: Additional context (tokens, entries, etc.)
     """
     logger = get_logger("brain.timing")
-    
+
     context_parts = []
     for key, value in kwargs.items():
         context_parts.append(f"{key}={value}")
-    
+
     context_str = f" ({', '.join(context_parts)})" if context_parts else ""
     logger.info(f"{operation} completed in {elapsed_seconds:.2f}s{context_str}")
 
@@ -143,15 +144,15 @@ def log_llm_call(
     completion_tokens: int,
     total_tokens: int,
     elapsed_seconds: float,
-    cost_estimate: float
+    cost_estimate: float,
 ) -> None:
     """Log LLM call details with consistent format.
-    
+
     Args:
         operation: Type of operation (backlinks, tags, etc.)
         model: Model used
         prompt_tokens: Input token count
-        completion_tokens: Output token count  
+        completion_tokens: Output token count
         total_tokens: Total token count
         elapsed_seconds: Time taken
         cost_estimate: Estimated cost in USD

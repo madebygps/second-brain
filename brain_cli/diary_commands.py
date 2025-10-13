@@ -1,22 +1,18 @@
 """Diary management commands."""
-import typer
-from rich.console import Console
-from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn
+
 from datetime import date, timedelta
 
+import typer
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
+
 from brain_core.config import get_config, get_llm_client
+from brain_core.constants import MIN_SUBSTANTIAL_CONTENT_CHARS, PAST_ENTRIES_LOOKBACK_DAYS
 from brain_core.entry_manager import EntryManager
-from brain_core.template_generator import generate_prompts_for_date
+from brain_core.llm_analysis import generate_semantic_backlinks, generate_semantic_tags
 from brain_core.report_generator import create_memory_trace_report
-from brain_core.llm_analysis import (
-    generate_semantic_backlinks,
-    generate_semantic_tags
-)
-from brain_core.constants import (
-    PAST_ENTRIES_LOOKBACK_DAYS,
-    MIN_SUBSTANTIAL_CONTENT_CHARS
-)
+from brain_core.template_generator import generate_prompts_for_date
 
 app = typer.Typer(help="AI-powered diary with smart prompts and automatic backlinks")
 console = Console()
@@ -30,10 +26,10 @@ MAX_PATTERN_TAGS = 15
 
 def parse_date_arg(date_arg: str) -> date:
     """Parse date argument (today, yesterday, or YYYY-MM-DD).
-    
+
     Args:
         date_arg: Date string to parse ("today", "yesterday", or "YYYY-MM-DD")
-        
+
     Returns:
         Parsed date object
     """
@@ -47,10 +43,10 @@ def parse_date_arg(date_arg: str) -> date:
 
 def check_llm_connection(llm_client) -> bool:
     """Check LLM connection and print error if unavailable.
-    
+
     Args:
         llm_client: LLM client instance to check
-        
+
     Returns:
         True if connection successful, False otherwise
     """
@@ -62,50 +58,42 @@ def check_llm_connection(llm_client) -> bool:
 
 def generate_entry_links(entry, entry_manager, llm_client):
     """Generate semantic and temporal links for an entry.
-    
+
     Args:
         entry: DiaryEntry to generate links for
         entry_manager: EntryManager instance
         llm_client: LLM client for semantic analysis
-        
+
     Returns:
         Tuple of (temporal_links, tags, link_metadata, semantic_links)
     """
     # Get past entries for semantic analysis
     past_entries = entry_manager.list_entries(days=PAST_ENTRIES_LOOKBACK_DAYS)
-    
+
     # Use LLM to find semantic backlinks with confidence scores
     semantic_links = generate_semantic_backlinks(
-        entry,
-        past_entries,
-        llm_client,
-        max_links=MAX_SEMANTIC_LINKS
+        entry, past_entries, llm_client, max_links=MAX_SEMANTIC_LINKS
     )
-    
+
     # Generate topic tags using LLM
     tags = generate_semantic_tags([entry], llm_client, max_tags=MAX_TOPIC_TAGS)
-    
+
     # Get temporal links (past N days)
     past_dates = entry_manager.get_past_calendar_days(entry.date, TEMPORAL_LOOKBACK_DAYS)
     temporal_links = [d.isoformat() for d in past_dates if entry_manager.entry_exists(d)]
-    
+
     # Build link metadata dict for enhanced display
     link_metadata = {}
     for link in semantic_links:
         if link.target_date not in temporal_links:
             temporal_links.append(link.target_date)
-        link_metadata[link.target_date] = {
-            "confidence": link.confidence,
-            "reason": link.reason
-        }
-    
+        link_metadata[link.target_date] = {"confidence": link.confidence, "reason": link.reason}
+
     return temporal_links, tags, link_metadata, semantic_links
 
 
 @app.command()
-def create(
-    date_arg: str = typer.Argument("today", help="Date (today, yesterday, or YYYY-MM-DD)")
-):
+def create(date_arg: str = typer.Argument("today", help="Date (today, yesterday, or YYYY-MM-DD)")):
     """Create a new diary entry with AI-generated prompts."""
     try:
         config = get_config()
@@ -120,9 +108,7 @@ def create(
 
         # Generate prompts with progress indicator
         with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
         ) as progress:
             progress.add_task(description="Generating AI prompts...", total=None)
 
@@ -148,9 +134,7 @@ def create(
 
 
 @app.command()
-def link(
-    date_arg: str = typer.Argument("today", help="Date (today, yesterday, or YYYY-MM-DD)")
-):
+def link(date_arg: str = typer.Argument("today", help="Date (today, yesterday, or YYYY-MM-DD)")):
     """Generate backlinks and tags for an existing entry."""
     try:
         config = get_config()
@@ -166,7 +150,9 @@ def link(
 
         # Check if entry has substantial content
         if not entry.has_substantial_content:
-            console.print(f"[yellow]Entry has less than {MIN_SUBSTANTIAL_CONTENT_CHARS} characters. Skipping linking.[/yellow]")
+            console.print(
+                f"[yellow]Entry has less than {MIN_SUBSTANTIAL_CONTENT_CHARS} characters. Skipping linking.[/yellow]"
+            )
             return
 
         # Initialize LLM client
@@ -177,11 +163,11 @@ def link(
             return
 
         with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
         ) as progress:
-            progress.add_task(description="Finding related entries with enhanced LLM analysis...", total=None)
+            progress.add_task(
+                description="Finding related entries with enhanced LLM analysis...", total=None
+            )
 
             # Generate all links using helper function
             temporal_links, tags, link_metadata, semantic_links = generate_entry_links(
@@ -196,7 +182,9 @@ def link(
 
         console.print(f"[green]✓[/green] Updated links for: [bold]{entry.filename}[/bold]")
         console.print(f"[dim]  Temporal links: {len(temporal_links)}[/dim]")
-        console.print(f"[dim]  Semantic links: {len(semantic_links)} (high: {sum(1 for link in semantic_links if link.confidence == 'high')})[/dim]")
+        console.print(
+            f"[dim]  Semantic links: {len(semantic_links)} (high: {sum(1 for link in semantic_links if link.confidence == 'high')})[/dim]"
+        )
         console.print(f"[dim]  Topic tags: {len(tags)}[/dim]")
 
     except Exception as e:
@@ -205,9 +193,7 @@ def link(
 
 
 @app.command()
-def report(
-    days: int = typer.Argument(30, help="Number of days to include in report")
-):
+def report(days: int = typer.Argument(30, help="Number of days to include in report")):
     """Generate a memory trace report showing recurring activities and semantic connections between entries."""
     try:
         config = get_config()
@@ -215,11 +201,11 @@ def report(
         entry_manager = EntryManager(config.diary_path, config.planner_path)
 
         with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
         ) as progress:
-            progress.add_task(description=f"Generating memory trace report for past {days} days...", total=None)
+            progress.add_task(
+                description=f"Generating memory trace report for past {days} days...", total=None
+            )
 
             entries = entry_manager.list_entries(days=days)
 
@@ -237,9 +223,7 @@ def report(
 
 
 @app.command()
-def list(
-    days: int = typer.Argument(7, help="Number of days to list")
-):
+def list(days: int = typer.Argument(7, help="Number of days to list")):
     """List recent diary entries."""
     try:
         config = get_config()
@@ -261,11 +245,7 @@ def list(
             if len(entry.brain_dump) > 60:
                 preview += "..."
 
-            table.add_row(
-                entry.date.isoformat(),
-                preview,
-                str(len(entry.brain_dump))
-            )
+            table.add_row(entry.date.isoformat(), preview, str(len(entry.brain_dump)))
 
         console.print(table)
 
@@ -275,9 +255,7 @@ def list(
 
 
 @app.command()
-def patterns(
-    days: int = typer.Argument(7, help="Number of days to analyze")
-):
+def patterns(days: int = typer.Argument(7, help="Number of days to analyze")):
     """Identify emotional and psychological patterns from recent entries using LLM analysis."""
     try:
         config = get_config()
@@ -297,9 +275,7 @@ def patterns(
             return
 
         with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
         ) as progress:
             progress.add_task(description="Analyzing emotional patterns with LLM...", total=None)
 
@@ -328,7 +304,7 @@ def patterns(
 def refresh(
     days: int = typer.Argument(30, help="Number of days to refresh backlinks for"),
     all: bool = typer.Option(False, "--all", "-a", help="Include entries with <50 chars"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show skipped entries")
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show skipped entries"),
 ):
     """Refresh backlinks and tags for all entries in the past N days."""
     try:
@@ -349,22 +325,30 @@ def refresh(
             skipped = [e for e in entries if not e.has_substantial_content]
 
             if verbose and skipped:
-                console.print(f"[dim]Skipping {len(skipped)} entries with <{MIN_SUBSTANTIAL_CONTENT_CHARS} chars:[/dim]")
+                console.print(
+                    f"[dim]Skipping {len(skipped)} entries with <{MIN_SUBSTANTIAL_CONTENT_CHARS} chars:[/dim]"
+                )
                 for entry in skipped[:5]:  # Show first 5
-                    console.print(f"[dim]  - {entry.date.isoformat()} ({len(entry.brain_dump)} chars)[/dim]")
+                    console.print(
+                        f"[dim]  - {entry.date.isoformat()} ({len(entry.brain_dump)} chars)[/dim]"
+                    )
                 if len(skipped) > 5:
                     console.print(f"[dim]  ... and {len(skipped) - 5} more[/dim]")
                 console.print()
 
         if not entries_to_refresh:
             console.print("[yellow]No entries to refresh[/yellow]")
-            console.print(f"[dim]Found {len(entries)} entries total, but all have <{MIN_SUBSTANTIAL_CONTENT_CHARS} chars of content[/dim]")
+            console.print(
+                f"[dim]Found {len(entries)} entries total, but all have <{MIN_SUBSTANTIAL_CONTENT_CHARS} chars of content[/dim]"
+            )
             console.print("[dim]Use --all flag to refresh all entries regardless of length[/dim]")
             return
 
         console.print(f"[bold]Refreshing backlinks for {len(entries_to_refresh)} entries...[/bold]")
         if not all:
-            console.print(f"[dim]Skipping {len(entries) - len(entries_to_refresh)} entries with <{MIN_SUBSTANTIAL_CONTENT_CHARS} chars (use --all to include)[/dim]\n")
+            console.print(
+                f"[dim]Skipping {len(entries) - len(entries_to_refresh)} entries with <{MIN_SUBSTANTIAL_CONTENT_CHARS} chars (use --all to include)[/dim]\n"
+            )
         else:
             console.print()
 
@@ -376,13 +360,10 @@ def refresh(
             return
 
         with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
         ) as progress:
             task = progress.add_task(
-                description="Processing entries with LLM...",
-                total=len(entries_to_refresh)
+                description="Processing entries with LLM...", total=len(entries_to_refresh)
             )
 
             updated_count = 0

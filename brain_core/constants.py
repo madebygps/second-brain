@@ -13,7 +13,7 @@ MAX_ENTRIES_FOR_TAG_CONTEXT = 5  # Max entries to analyze for tag generation
 ENTRY_PREVIEW_LENGTH = 400  # For candidate entries in lists (shorter for token efficiency)
 TARGET_PREVIEW_LENGTH = 500  # For main entry being analyzed (longer for better matching)
 
-# Analysis parameters 
+# Analysis parameters
 DEFAULT_THEMES_COUNT = 10
 MEMORY_TRACE_TOP_THEMES = 15
 TOP_CONNECTED_ENTRIES = 5
@@ -54,7 +54,7 @@ TASK_EXTRACTION_MAX_TOKENS = 300
 # Cost tracking and pricing (Azure OpenAI as of Oct 2025)
 AZURE_OPENAI_PRICING = {
     "gpt-4o": {
-        "input": 0.03 / 1000,   # $0.03 per 1K input tokens
+        "input": 0.03 / 1000,  # $0.03 per 1K input tokens
         "output": 0.06 / 1000,  # $0.06 per 1K output tokens
     },
     "gpt-4o-mini": {
@@ -68,5 +68,5 @@ AZURE_OPENAI_PRICING = {
     "gpt-35-turbo": {
         "input": 0.0015 / 1000,
         "output": 0.002 / 1000,
-    }
+    },
 }

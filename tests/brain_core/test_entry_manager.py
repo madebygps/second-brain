@@ -1,4 +1,5 @@
 """Tests for entry_manager module - Only essential tests to prevent data loss."""
+
 from datetime import date
 
 from brain_core.entry_manager import DiaryEntry, EntryManager

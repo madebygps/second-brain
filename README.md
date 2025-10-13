@@ -1,5 +1,8 @@
 # Second Brain
 
+[![Tests](https://github.com/madebygps/second-brain/actions/workflows/test.yml/badge.svg)](https://github.com/madebygps/second-brain/actions/workflows/test.yml)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/madebygps/second-brain/main.svg)](https://results.pre-commit.ci/latest/github/madebygps/second-brain/main)
+
 AI-powered personal knowledge system with daily planning, reflective journaling, semantic backlinks, and intelligent book notes search.
 
 ## Features
@@ -29,6 +32,9 @@ AI-powered personal knowledge system with daily planning, reflective journaling,
 ```bash
 # Install dependencies
 uv sync
+
+# Set up pre-commit hooks (optional but recommended)
+uv run pre-commit install
 
 # Configure
 cp .env.example .env
@@ -166,7 +172,9 @@ After writing, run `brain diary link today` to add semantic backlinks:
   - Analysis reports and patterns
 - **Azure AI Search** - Required for book notes search functionality only
 
-## Testing
+## Development
+
+### Testing
 
 Minimal test suite focused on preventing data loss:
 
@@ -180,6 +188,41 @@ uv run pytest --cov              # Run with coverage
 - File naming (reflection vs. plan entries)
 - Write/read cycles (prevent data loss)
 - Path separation (diary vs. planner)
+
+### Code Quality
+
+Pre-commit hooks automatically run before each commit:
+
+```bash
+# Install hooks (one-time setup)
+uv run pre-commit install
+
+# Run manually on all files
+uv run pre-commit run --all-files
+```
+
+**Hooks include:**
+- `ruff` - Fast Python linter with auto-fix
+- `ruff-format` - Auto-format Python code
+- `pytest` - Run test suite (prevents data loss bugs)
+- File checks (trailing whitespace, file endings, large files)
+
+**[pre-commit.ci](https://pre-commit.ci) integration:**
+- ✅ Automatically fixes PRs (formatting, imports, etc.)
+- ✅ Weekly dependency updates
+- ✅ Zero configuration needed
+
+### CI/CD
+
+**GitHub Actions** runs on push/PR:
+- ✅ Tests with coverage reporting
+- ✅ Test count validation (ensures 7 tests)
+- ✅ Python 3.13 compatibility check
+
+**[pre-commit.ci](https://pre-commit.ci)** runs on PRs:
+- ✅ Auto-fixes formatting and linting issues
+- ✅ Weekly dependency updates (automated PRs)
+- ✅ Faster than GitHub Actions for simple checks
 
 ## License
 

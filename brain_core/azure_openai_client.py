@@ -1,10 +1,12 @@
 """Azure OpenAI client for cloud LLM interactions."""
-from typing import Optional
-import time
+
 import logging
+import time
+
 from openai import AzureOpenAI
-from .llm_client import LLMClient
+
 from .cost_tracker import get_cost_tracker
+from .llm_client import LLMClient
 from .logging_config import log_llm_call
 
 logger = logging.getLogger(__name__)
@@ -18,26 +20,22 @@ class AzureOpenAIClient(LLMClient):
         api_key: str,
         endpoint: str,
         deployment_name: str,
-        api_version: str = "2024-02-15-preview"
+        api_version: str = "2024-02-15-preview",
     ):
-        self.client = AzureOpenAI(
-            api_key=api_key,
-            azure_endpoint=endpoint,
-            api_version=api_version
-        )
+        self.client = AzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version=api_version)
         self.deployment_name = deployment_name
 
     def generate_sync(
         self,
         prompt: str,
-        system: Optional[str] = None,
+        system: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         operation: str = "generate",
-        entry_date: Optional[str] = None
+        entry_date: str | None = None,
     ) -> str:
         """Generate text using Azure OpenAI API.
-        
+
         Args:
             prompt: User prompt text
             system: System message (optional)
@@ -45,7 +43,7 @@ class AzureOpenAIClient(LLMClient):
             max_tokens: Maximum tokens to generate
             operation: Type of operation for cost tracking (backlinks, tags, etc.)
             entry_date: Date of diary entry being processed (for cost tracking)
-            
+
         Returns:
             Generated text response
         """
@@ -57,17 +55,17 @@ class AzureOpenAIClient(LLMClient):
         messages.append({"role": "user", "content": prompt})
 
         start_time = time.time()
-        
+
         try:
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
             )
-            
+
             elapsed_seconds = time.time() - start_time
-            
+
             # Extract response text and usage information
             response_text = response.choices[0].message.content or ""
             usage = response.usage
@@ -75,22 +73,22 @@ class AzureOpenAIClient(LLMClient):
                 prompt_tokens = usage.prompt_tokens
                 completion_tokens = usage.completion_tokens
                 total_tokens = usage.total_tokens
-                
+
                 # Track costs
                 cost_tracker = get_cost_tracker()
                 estimated_cost = cost_tracker.calculate_cost(
                     self.deployment_name, prompt_tokens, completion_tokens
                 )
-                
+
                 # Prepare metadata
                 metadata = {
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     "prompt_length": len(prompt),
                     "response_length": len(response_text),
-                    "system_prompt_length": len(system) if system else 0
+                    "system_prompt_length": len(system) if system else 0,
                 }
-                
+
                 # Record usage
                 cost_tracker.record_usage(
                     operation=operation,
@@ -99,9 +97,9 @@ class AzureOpenAIClient(LLMClient):
                     completion_tokens=completion_tokens,
                     elapsed_seconds=elapsed_seconds,
                     entry_date=entry_date,
-                    metadata=metadata
+                    metadata=metadata,
                 )
-                
+
                 # Log LLM call details
                 log_llm_call(
                     operation=operation,
@@ -110,13 +108,13 @@ class AzureOpenAIClient(LLMClient):
                     completion_tokens=completion_tokens,
                     total_tokens=total_tokens,
                     elapsed_seconds=elapsed_seconds,
-                    cost_estimate=estimated_cost
+                    cost_estimate=estimated_cost,
                 )
             else:
                 logger.warning(f"No usage information returned from {operation} operation")
 
             return response_text
-            
+
         except Exception as e:
             elapsed_seconds = time.time() - start_time
             logger.error(f"Azure OpenAI API error in {operation} after {elapsed_seconds:.2f}s: {e}")
@@ -126,10 +124,10 @@ class AzureOpenAIClient(LLMClient):
         """Check if Azure OpenAI is accessible."""
         try:
             # Make a minimal request to test connection
-            response = self.client.chat.completions.create(
+            self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=[{"role": "user", "content": "test"}],
-                max_tokens=1
+                max_tokens=1,
             )
             return True
         except Exception:

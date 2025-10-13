@@ -1,17 +1,17 @@
 """Planning commands for daily task management."""
-import typer
+
+import logging
 import re
 import time
-import logging
+from datetime import date, timedelta
+
+import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from datetime import date, timedelta
-from typing import List
 
 from brain_core.config import get_config, get_llm_client
-from brain_core.logging_config import log_operation_timing
+from brain_core.constants import TASK_EXTRACTION_MAX_TOKENS, TASK_EXTRACTION_TEMPERATURE
 from brain_core.entry_manager import EntryManager
-from brain_core.constants import TASK_EXTRACTION_TEMPERATURE, TASK_EXTRACTION_MAX_TOKENS
 
 app = typer.Typer(help="Daily planning with task management")
 console = Console()
@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 def parse_date_arg(date_arg: str) -> date:
     """Parse date argument (today, tomorrow, or YYYY-MM-DD).
-    
+
     Args:
         date_arg: Date string to parse ("today", "tomorrow", or "YYYY-MM-DD")
-        
+
     Returns:
         Parsed date object
     """
@@ -35,20 +35,20 @@ def parse_date_arg(date_arg: str) -> date:
         return date.fromisoformat(date_arg)
 
 
-def extract_tasks_from_diary(diary_entry_content: str, diary_date: str, llm_client) -> List[str]:
+def extract_tasks_from_diary(diary_entry_content: str, diary_date: str, llm_client) -> list[str]:
     """Extract actionable tasks from yesterday's diary entry using LLM.
-    
+
     Args:
         diary_entry_content: Content of yesterday's diary entry
         diary_date: ISO format date of the diary entry
         llm_client: LLM client for task extraction
-        
+
     Returns:
         List of task strings extracted from the diary
     """
     if not diary_entry_content or len(diary_entry_content.strip()) < 50:
         return []
-    
+
     system_prompt = """You are a task extraction assistant. Analyze diary entries and extract actionable tasks for today.
 
 Extract tasks that:
@@ -84,37 +84,35 @@ Extract specific, actionable tasks that should be done today. Return as a number
             temperature=TASK_EXTRACTION_TEMPERATURE,
             max_tokens=TASK_EXTRACTION_MAX_TOKENS,
             operation="task_extraction",
-            entry_date=diary_date
+            entry_date=diary_date,
         )
         elapsed = time.time() - start_time
-        
+
         # Parse tasks from response
         if "NO_TASKS" in response.upper():
             logger.debug(f"No tasks extracted from diary in {elapsed:.2f}s")
             return []
-        
+
         tasks = []
         for line in response.split("\n"):
             line = line.strip()
             # Match numbered lists like "1. Task" or "1) Task"
             if line and line[0].isdigit():
                 # Remove leading number and punctuation
-                task = re.sub(r'^\d+[.)\s]+', '', line).strip()
+                task = re.sub(r"^\d+[.)\s]+", "", line).strip()
                 if task and len(task) > 5:  # Minimum task length
                     tasks.append(task)
-        
+
         logger.debug(f"Extracted {len(tasks)} tasks from diary in {elapsed:.2f}s")
         return tasks
-        
+
     except Exception as e:
         logger.warning(f"Failed to extract tasks from diary: {e}")
         return []
 
 
 @app.command()
-def create(
-    date_arg: str = typer.Argument("today", help="Date (today, tomorrow, or YYYY-MM-DD)")
-):
+def create(date_arg: str = typer.Argument("today", help="Date (today, tomorrow, or YYYY-MM-DD)")):
     """Create a daily plan with action items (extracts tasks from yesterday's diary and plan)."""
     try:
         config = get_config()
@@ -129,7 +127,7 @@ def create(
 
         yesterday_date = entry_date - timedelta(days=1)
         all_tasks = []
-        
+
         # 1. Extract pending todos from yesterday's plan (if it exists)
         yesterday_plan = entry_manager.read_entry(yesterday_date, entry_type="plan")
         unchecked_count = 0
@@ -140,7 +138,7 @@ def create(
                     if todo_text:
                         all_tasks.append(f"{todo_text} (from [[{yesterday_date.isoformat()}]])")
                         unchecked_count += 1
-        
+
         # 2. Extract tasks from yesterday's diary entry using LLM
         yesterday_diary = entry_manager.read_entry(yesterday_date, entry_type="reflection")
         extracted_count = 0
@@ -148,17 +146,17 @@ def create(
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                console=console
+                console=console,
             ) as progress:
-                progress.add_task(description="Analyzing yesterday's diary for tasks...", total=None)
-                
+                progress.add_task(
+                    description="Analyzing yesterday's diary for tasks...", total=None
+                )
+
                 llm_client = get_llm_client()
                 extracted_tasks = extract_tasks_from_diary(
-                    yesterday_diary.brain_dump,
-                    yesterday_date.isoformat(),
-                    llm_client
+                    yesterday_diary.brain_dump, yesterday_date.isoformat(), llm_client
                 )
-                
+
                 for task in extracted_tasks:
                     # Add backlink to diary entry
                     task_with_link = f"{task} (from [[{yesterday_date.isoformat()}]])"
@@ -178,15 +176,16 @@ def create(
         sections.append("")
 
         content = "\n".join(sections)
-        
+
         from brain_core.entry_manager import DiaryEntry
+
         entry = DiaryEntry(entry_date, content, entry_type="plan")
 
         entry_manager.write_entry(entry)
 
         console.print(f"[green]✓[/green] Created plan: [bold]{entry.filename}[/bold]")
         console.print(f"[dim]Location: {config.planner_path / entry.filename}[/dim]")
-        
+
         if unchecked_count > 0 or extracted_count > 0:
             summary_parts = []
             if unchecked_count > 0:
