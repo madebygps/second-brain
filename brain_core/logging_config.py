@@ -52,7 +52,13 @@ def setup_logging(
 
     # Configure root logger
     root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
+
+    # If file logging is enabled, root logger should capture everything (DEBUG)
+    # so file gets full details. Console handler will filter based on user preference.
+    if enable_file_logging:
+        root_logger.setLevel(logging.DEBUG)
+    else:
+        root_logger.setLevel(log_level)
 
     # Clear existing handlers
     root_logger.handlers.clear()

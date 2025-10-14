@@ -132,7 +132,9 @@ brain --verbose <command>      # Show key operations
 brain --debug <command>        # Full diagnostics with LLM details
 ```
 
-> **Logs:** By default, logs are suppressed during operations to avoid interrupting spinners. Use `--verbose` or `--debug` for detailed information with beautiful Rich formatting.
+> **Console Logs:** By default, logs are suppressed during operations to avoid interrupting spinners. Use `--verbose` or `--debug` for detailed information with beautiful Rich formatting.
+
+> **File Logs:** Optional. Set `BRAIN_LOG_FILE` in `.env` to enable persistent logging with automatic rotation (max 10MB per file, 5 backups). File logs always capture full DEBUG details regardless of console log level.
 
 > **Cost Tracking:** All Azure OpenAI usage is automatically tracked in a local SQLite database (`~/.brain/costs.db`). Data stays private and grows ~10-50 MB/year for typical use.
 
@@ -160,10 +162,13 @@ Create `~/.config/brain/.env` with these settings:
 - `AZURE_SEARCH_API_KEY` - Azure AI Search API key
 - `AZURE_SEARCH_INDEX_NAME` - Search index name (default: second-brain-notes)
 
-**Cost Tracking** (optional configuration):
+**Logging & Cost Tracking** (optional configuration):
 - `BRAIN_COST_DB_PATH` - Path to cost tracking database (default: ~/.brain/costs.db)
 - `BRAIN_LOG_LEVEL` - Logging level: DEBUG, INFO, WARNING, ERROR (default: INFO)
-- `BRAIN_LOG_FILE` - Path to log file (optional, logs to console if not set)
+- `BRAIN_LOG_FILE` - Path to log file with automatic rotation (optional, logs to console if not set)
+  - When enabled: captures all DEBUG logs to file regardless of console log level
+  - Automatic rotation: max 10MB per file, keeps 5 backups (~50MB total)
+  - Example: `BRAIN_LOG_FILE=~/.brain/logs/brain.log`
 
 **Custom Pricing** (optional - override Azure OpenAI pricing):
 - `AZURE_GPT4O_INPUT_PRICE` - Price per 1K input tokens for gpt-4o (default: 0.03)
