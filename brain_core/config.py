@@ -31,18 +31,48 @@ class Config:
         """Load configuration from .env file.
 
         Args:
-            env_file: Optional path to .env file. If None, loads from default location.
+            env_file: Optional path to .env file. If None, searches standard locations.
             validate_paths: If True, validates that paths exist. Set to False for testing.
         """
         if env_file:
             load_dotenv(env_file)
         else:
-            load_dotenv()
+            # Search for .env in standard locations (in priority order)
+            env_locations = [
+                Path.cwd() / ".env",  # Current directory (highest priority)
+                Path.home() / ".config" / "brain" / ".env",  # XDG config dir
+                Path.home() / ".brain" / ".env",  # Legacy location
+            ]
+
+            env_found = False
+            for env_path in env_locations:
+                # Resolve symlinks and check if file exists
+                try:
+                    resolved_path = env_path.resolve(strict=False)
+                    # Security: Only load if file is readable and is a regular file
+                    if resolved_path.exists() and resolved_path.is_file():
+                        load_dotenv(resolved_path)
+                        env_found = True
+                        break
+                except (OSError, RuntimeError):
+                    # Skip paths that can't be resolved (permission issues, etc.)
+                    continue
+
+            if not env_found:
+                # Try default load_dotenv() which searches up the directory tree
+                load_dotenv()
 
         # Required paths
         diary_path = os.getenv("DIARY_PATH")
         if not diary_path:
-            raise ValueError("DIARY_PATH must be set in .env")
+            raise ValueError(
+                "DIARY_PATH must be set in .env file.\n"
+                "Create .env file in one of these locations:\n"
+                f"  - {Path.home() / '.config' / 'brain' / '.env'} (recommended)\n"
+                f"  - {Path.home() / '.brain' / '.env'}\n"
+                f"  - {Path.cwd() / '.env'}\n"
+                "See SETUP_CHECKLIST.md for configuration guide."
+            )
 
         planner_path = os.getenv("PLANNER_PATH")
         if not planner_path:

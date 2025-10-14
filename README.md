@@ -12,22 +12,15 @@ AI-powered personal knowledge system with daily planning, reflective journaling,
 Install directly from GitHub:
 
 ```bash
-# Using uv (recommended - fastest)
 uv tool install git+https://github.com/madebygps/second-brain.git
-
-# Or using pipx (isolated environment)
-pipx install git+https://github.com/madebygps/second-brain.git
-
-# Or using pip (system-wide)
-pip install git+https://github.com/madebygps/second-brain.git
 ```
 
 After installation, the `brain` command will be available globally:
 ```bash
 brain --help
-brain plan create today
-brain diary create today
 ```
+
+**Next:** Configure your `.env` file (see [Configuration](#configuration) below).
 
 ### For Development
 
@@ -74,13 +67,23 @@ uv run brain --help
 
 ## Quick Start
 
-After installing (see [Installation](#installation)):
+### First-Time Setup
+
+1. **Install** (see [Installation](#installation) above)
+
+2. **Configure** - Create `~/.config/brain/.env` with your settings:
 
 ```bash
-# Configure (first time only)
-cp .env.example .env
-# Edit .env with your paths and Azure credentials
+mkdir -p ~/.config/brain
+curl -o ~/.config/brain/.env https://raw.githubusercontent.com/madebygps/second-brain/main/.env.example
+nano ~/.config/brain/.env  # Edit with your paths and Azure credentials
+```
 
+See [SETUP_CHECKLIST.md](SETUP_CHECKLIST.md) for detailed setup instructions.
+
+3. **Use**:
+
+```bash
 # Morning: Create your planning entry (saves to PLANNER_PATH)
 brain plan create today
 
@@ -91,7 +94,9 @@ brain diary create today
 brain notes search "discipline"
 ```
 
-> **Note:** If developing locally, prefix commands with `uv run` (e.g., `uv run brain plan create today`)
+> **Note:** The `.env` file is automatically searched in `~/.config/brain/.env`, `~/.brain/.env`, or current directory.
+>
+> **For developers:** When running locally, prefix commands with `uv run` (e.g., `uv run brain plan create today`)
 
 ## Usage
 
@@ -128,11 +133,18 @@ brain --verbose <command>      # Show key operations
 brain --debug <command>        # Full diagnostics with LLM details
 ```
 
-> **Clean UX:** By default, logs are suppressed during operations to avoid interrupting spinners. Use `--verbose` or `--debug` for detailed information with beautiful Rich formatting.
+> **Logs:** By default, logs are suppressed during operations to avoid interrupting spinners. Use `--verbose` or `--debug` for detailed information with beautiful Rich formatting.
 
 > **Cost Tracking:** All Azure OpenAI usage is automatically tracked in a local SQLite database (`~/.brain/costs.db`). Data stays private and grows ~10-50 MB/year for typical use.
 
 ## Configuration
+
+The `brain` CLI automatically searches for `.env` in these locations (in priority order):
+1. Current directory (`./.env`)
+2. User config directory (`~/.config/brain/.env`) ⭐ **Recommended**
+3. Home directory (`~/.brain/.env`)
+
+Create `~/.config/brain/.env` with these settings:
 
 **Required Paths:**
 - `DIARY_PATH` - Path to Obsidian vault or markdown directory for reflection entries
