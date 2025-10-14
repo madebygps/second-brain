@@ -1,7 +1,6 @@
 # Second Brain
 
 [![Tests](https://github.com/madebygps/second-brain/actions/workflows/test.yml/badge.svg)](https://github.com/madebygps/second-brain/actions/workflows/test.yml)
-[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/madebygps/second-brain/main.svg)](https://results.pre-commit.ci/latest/github/madebygps/second-brain/main)
 
 AI-powered personal knowledge system with daily planning, reflective journaling, semantic backlinks, and intelligent book notes search.
 
