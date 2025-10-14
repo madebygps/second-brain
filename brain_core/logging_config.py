@@ -2,6 +2,7 @@
 
 import logging
 import os
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from rich.console import Console
@@ -69,14 +70,21 @@ def setup_logging(
     console_handler.setLevel(log_level)
     root_logger.addHandler(console_handler)
 
-    # File handler (if enabled)
+    # File handler (if enabled) with rotation
     if enable_file_logging:
         if log_file is None:
             log_dir = Path.home() / ".brain" / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / "brain.log"
 
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        # Rotating file handler: max 10MB per file, keep 5 backup files
+        # This means max ~50MB of logs total (10MB current + 5x10MB backups)
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5,  # Keep 5 old files (brain.log.1, brain.log.2, etc.)
+            encoding="utf-8",
+        )
         file_handler.setLevel(logging.DEBUG)  # File always captures everything
         file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)
