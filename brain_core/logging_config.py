@@ -76,6 +76,10 @@ def setup_logging(
             log_dir = Path.home() / ".brain" / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / "brain.log"
+        else:
+            # Expand ~ in path and ensure parent directory exists
+            log_file = Path(log_file).expanduser()
+            log_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Rotating file handler: max 10MB per file, keep 5 backup files
         # This means max ~50MB of logs total (10MB current + 5x10MB backups)
