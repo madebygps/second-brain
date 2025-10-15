@@ -31,11 +31,6 @@ def mock_env(monkeypatch, temp_dir):
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4")
     monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
 
-    # Azure Search configuration (required)
-    monkeypatch.setenv("AZURE_SEARCH_ENDPOINT", "https://test.search.windows.net")
-    monkeypatch.setenv("AZURE_SEARCH_API_KEY", "test-search-key")
-    monkeypatch.setenv("AZURE_SEARCH_INDEX_NAME", "test-index")
-
     return {
         "diary_path": diary_path,
         "planner_path": planner_path,
@@ -53,7 +48,7 @@ def sample_entry_content():
 
 ## Brain Dump
 Today I focused on deep work and made great progress on the project.
-I learned about semantic search and how to integrate Azure AI Search.
+I learned about semantic search and reflective journaling.
 
 ---
 

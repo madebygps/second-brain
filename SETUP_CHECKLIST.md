@@ -76,11 +76,6 @@ AZURE_OPENAI_API_KEY=your-api-key-here
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=gpt-4o
 AZURE_OPENAI_API_VERSION=2024-02-15-preview
-
-# Required: Azure AI Search (for book notes search)
-AZURE_SEARCH_ENDPOINT=https://your-search-service.search.windows.net
-AZURE_SEARCH_API_KEY=your-search-api-key-here
-AZURE_SEARCH_INDEX_NAME=second-brain-notes
 ```
 
 **Optional variables** (with defaults):
@@ -107,16 +102,6 @@ BRAIN_LOG_FILE=~/.brain/logs/brain.log
 5. Go to **Model deployments**
 6. Copy your deployment name (e.g., "gpt-4o") → `AZURE_OPENAI_DEPLOYMENT`
 
-#### Azure AI Search (Required for notes search)
-
-1. Go to [Azure Portal](https://portal.azure.com)
-2. Navigate to your Azure AI Search resource
-3. Go to **Keys**
-4. Copy:
-   - **Primary admin key** → `AZURE_SEARCH_API_KEY`
-5. Copy the URL from Overview page → `AZURE_SEARCH_ENDPOINT`
-6. Go to **Indexes** and copy your index name → `AZURE_SEARCH_INDEX_NAME`
-
 ### Step 5: Test Configuration
 
 Test that everything is configured correctly:
@@ -127,9 +112,6 @@ brain diary list
 
 # Test plan commands (uses PLANNER_PATH)
 brain plan create today
-
-# Test notes search (uses Azure AI Search)
-brain notes status
 
 # Test cost tracking (uses BRAIN_COST_DB_PATH)
 brain cost summary
@@ -256,12 +238,7 @@ Once configured:
    brain diary patterns 7
    ```
 
-4. **Search your notes:**
-   ```bash
-   brain notes search "topic"
-   ```
-
-5. **Track costs:**
+4. **Track costs:**
    ```bash
    brain cost summary
    brain cost trends 30

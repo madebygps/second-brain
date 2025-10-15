@@ -10,7 +10,6 @@ AI-powered journaling system with markdown entries, semantic backlinks, and LLM-
 - Testing: pytest with 57 tests, 47% coverage
 - CLI: typer (add_completion=False) + rich
 - LLM: Azure OpenAI (required)
-- Search: Azure AI Search for book notes
 
 ## Architecture
 
@@ -24,7 +23,6 @@ Core functionality with comprehensive type hints and dataclasses:
 - `entry_manager.py` - Entry I/O and parsing (93% coverage)
 - `llm_client.py` - Abstract LLM interface (73% coverage)
 - `azure_openai_client.py` - Azure OpenAI client (40% coverage)
-- `notes_search_client.py` - Book notes search (100% coverage)
 - `llm_analysis.py` - Atomic LLM operations: entities, backlinks, tags (17% coverage)
 - `report_generator.py` - Report orchestration (18% coverage)
 - `template_generator.py` - AI prompt generation (42% coverage)
@@ -35,7 +33,6 @@ User-facing commands with typer:
 - `main.py` - Root CLI entry point (92% coverage)
 - `diary_commands.py` - Diary management (23% coverage)
 - `plan_commands.py` - Daily planning with LLM task extraction (49% coverage)
-- `notes_commands.py` - Book notes search (44% coverage)
 
 ## Common Commands
 
@@ -51,13 +48,6 @@ uv run brain diary report 7       # Memory trace analysis for 7 days
 uv run brain diary patterns 7     # Statistical patterns
 uv run brain diary list           # List all entries
 uv run brain diary refresh 30     # Regenerate links for last 30 days
-
-# Notes commands (Azure AI Search)
-uv run brain notes search "topic"
-uv run brain notes search "query" --top 5
-uv run brain notes search "query" --semantic
-uv run brain notes search "query" --detailed
-uv run brain notes status
 
 # Development
 uv sync                           # Install dependencies
@@ -79,12 +69,6 @@ uv run pytest tests/ --cov        # With coverage
 - `AZURE_OPENAI_DEPLOYMENT` - Model deployment name (e.g., gpt-4o)
 - `AZURE_OPENAI_API_VERSION` - Default: 2024-02-15-preview
 - ✅ **Full functionality:** Diary prompts, task extraction, semantic analysis, backlinks, tags, reports
-
-**Azure AI Search (required for `brain notes` search only):**
-- `AZURE_SEARCH_ENDPOINT` - Search service endpoint
-- `AZURE_SEARCH_API_KEY` - API key
-- `AZURE_SEARCH_INDEX_NAME` - Index name (default: second-brain-notes)
-- ⚠️ **No local alternative:** This is a separate Azure service.
 
 ## Entry Structure
 
@@ -160,8 +144,7 @@ Two entry types with specific formats:
 ```
 CLI Layer (brain_cli/)
 ├── diary_commands.py → report_generator.py, llm_analysis.py
-├── plan_commands.py → extract_tasks_from_diary() → LLM
-└── notes_commands.py → notes_search_client.py
+└── plan_commands.py → extract_tasks_from_diary() → LLM
     ↓
 report_generator.py (orchestration)
     ↓ uses
@@ -197,12 +180,12 @@ llm_client.py → azure_openai_client.py
 - Removed scheduler/daemon system (312 lines, 0% coverage)
 - Removed todos command (redundant with plan command)
 - Removed `generate_planning_prompts()` - plans no longer have prompts
-- Total code reduction: ~600 lines
+- Removed notes search functionality (238 lines) - focused on journaling/planning only
+- Total code reduction: ~838 lines
 
 **Module Improvements:**
 - Renamed `analysis.py` → `report_generator.py` (clearer purpose)
 - Renamed `azure_client.py` → `azure_openai_client.py` (clarity)
-- Renamed `azure_search_client.py` → `notes_search_client.py` (clarity)
 - Moved plan command from diary to separate `plan_commands.py` module
 - Updated `EntryManager` to accept separate diary_path and planner_path
 

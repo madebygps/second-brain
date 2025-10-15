@@ -8,7 +8,7 @@ authors = [
     { name = "Gwyneth Peña-Siguenza", email = "gwyneth@madebygps.com" }
 ]
 license = { text = "MIT" }
-keywords = ["journaling", "AI", "productivity", "knowledge-management", "obsidian", "azure-openai"]
+keywords = ["journaling", "AI", "productivity", "planning", "obsidian", "azure-openai"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
@@ -23,7 +23,6 @@ dependencies = [
     "rich>=13.9.4",
     "python-dotenv>=1.0.1",
     "httpx>=0.28.1",
-    "azure-search-documents>=11.6.0b7",
     "openai>=1.57.2",
 ]
 

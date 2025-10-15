@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/madebygps/second-brain/actions/workflows/test.yml/badge.svg)](https://github.com/madebygps/second-brain/actions/workflows/test.yml)
 
-AI-powered personal knowledge system with daily planning, reflective journaling, semantic backlinks, and intelligent book notes search.
+AI-powered personal knowledge system with daily planning, reflective journaling, and semantic backlinks.
 
 ## Installation
 
@@ -55,10 +55,6 @@ uv run brain --help
 - Automatic topic tags and temporal connections
 - Obsidian-compatible markdown format
 
-**Notes Search** (`brain notes`)
-- Semantic and text search of book notes via Azure AI Search
-- Rich formatted results with highlights
-
 **Cost Tracking** (`brain cost`)
 - Real-time Azure OpenAI usage tracking in local SQLite database
 - Comprehensive metadata: temperature, max_tokens, prompt/response lengths
@@ -88,9 +84,6 @@ brain plan create today
 
 # Evening: Create your reflection entry (saves to DIARY_PATH)
 brain diary create today
-
-# Search your book notes
-brain notes search "discipline"
 ```
 
 > **Note:** The `.env` file is automatically searched in `~/.config/brain/.env`, `~/.brain/.env`, or current directory.
@@ -113,11 +106,6 @@ brain diary list 7             # List recent entries
 # Analysis
 brain diary report 30          # Memory trace report (activities & connections)
 brain diary patterns 7         # Emotional & psychological patterns
-
-# Notes search
-brain notes search "topic"     # Search book notes
-brain notes search "topic" --semantic --detailed
-brain notes status             # Check connection
 
 # Cost tracking and analysis
 brain cost summary             # Usage summary for last 30 days
@@ -156,11 +144,6 @@ Create `~/.config/brain/.env` with these settings:
 - `AZURE_OPENAI_ENDPOINT` - Your Azure OpenAI endpoint
 - `AZURE_OPENAI_DEPLOYMENT` - Deployment name (default: gpt-4o)
 - `AZURE_OPENAI_API_VERSION` - API version (default: 2024-02-15-preview)
-
-**Azure AI Search** (required for notes search):
-- `AZURE_SEARCH_ENDPOINT` - Azure AI Search service endpoint
-- `AZURE_SEARCH_API_KEY` - Azure AI Search API key
-- `AZURE_SEARCH_INDEX_NAME` - Search index name (default: second-brain-notes)
 
 **Logging & Cost Tracking** (optional configuration):
 - `BRAIN_COST_DB_PATH` - Path to cost tracking database (default: ~/.brain/costs.db)
@@ -229,7 +212,6 @@ After writing, run `brain diary link today` to add semantic backlinks:
   - Task extraction from diary entries
   - Semantic backlinks and tags
   - Analysis reports and patterns
-- **Azure AI Search** - Required for book notes search functionality only
 
 ## Development
 
