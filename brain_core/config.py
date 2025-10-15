@@ -13,12 +13,19 @@ class Config:
     Required environment variables:
         DIARY_PATH: Path to Obsidian vault or markdown directory
         PLANNER_PATH: Path to planner directory for extracted todos
+        LLM_PROVIDER: LLM provider to use ("azure" or "ollama", default: "azure")
+
+    Azure OpenAI (required if LLM_PROVIDER=azure):
         AZURE_OPENAI_API_KEY: Azure OpenAI API key
         AZURE_OPENAI_ENDPOINT: Azure OpenAI endpoint URL
+        AZURE_OPENAI_DEPLOYMENT: Deployment name (default: "gpt-4o")
+        AZURE_OPENAI_API_VERSION: API version (default: "2024-02-15-preview")
+
+    Ollama (required if LLM_PROVIDER=ollama):
+        OLLAMA_BASE_URL: Ollama API URL (default: "http://localhost:11434")
+        OLLAMA_MODEL: Model name (default: "llama3.1")
 
     Optional environment variables:
-        AZURE_OPENAI_DEPLOYMENT: Azure OpenAI deployment name (default: "gpt-4o")
-        AZURE_OPENAI_API_VERSION: Azure OpenAI API version (default: "2024-02-15-preview")
         BRAIN_COST_DB_PATH: Path to cost tracking database (default: ~/.brain/costs.db)
         BRAIN_LOG_LEVEL: Logging level - DEBUG, INFO, WARNING, ERROR (default: INFO)
         BRAIN_LOG_FILE: Path to log file (optional, logs to console if not set)
@@ -85,17 +92,39 @@ class Config:
             if not self.planner_path.exists():
                 raise ValueError(f"PLANNER_PATH does not exist: {self.planner_path}")
 
-        # Azure OpenAI configuration (required)
-        self.azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-        if not self.azure_api_key:
-            raise ValueError("AZURE_OPENAI_API_KEY must be set in .env")
+        # LLM provider configuration
+        self.llm_provider = os.getenv("LLM_PROVIDER", "azure").lower()
+        if self.llm_provider not in ["azure", "ollama"]:
+            raise ValueError(f"LLM_PROVIDER must be 'azure' or 'ollama', got: {self.llm_provider}")
 
-        self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        if not self.azure_endpoint:
-            raise ValueError("AZURE_OPENAI_ENDPOINT must be set in .env")
+        # Azure OpenAI configuration (required if using Azure)
+        if self.llm_provider == "azure":
+            self.azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+            if not self.azure_api_key:
+                raise ValueError("AZURE_OPENAI_API_KEY must be set in .env when LLM_PROVIDER=azure")
 
-        self.azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
-        self.azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+            self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+            if not self.azure_endpoint:
+                raise ValueError(
+                    "AZURE_OPENAI_ENDPOINT must be set in .env when LLM_PROVIDER=azure"
+                )
+
+            self.azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+            self.azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+        else:
+            # Set defaults for Azure when using Ollama (for optional Azure features)
+            self.azure_api_key = None
+            self.azure_endpoint = None
+            self.azure_deployment = None
+            self.azure_api_version = None
+
+        # Ollama configuration (required if using Ollama)
+        if self.llm_provider == "ollama":
+            self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3.1")
+        else:
+            self.ollama_base_url = None
+            self.ollama_model = None
 
         # Cost tracking configuration (optional)
         self.cost_db_path = os.getenv("BRAIN_COST_DB_PATH")  # Default handled in CostTracker
@@ -124,25 +153,37 @@ def get_llm_client(config: Config | None = None):
                 Useful for testing with custom configurations.
 
     Returns:
-        Configured Azure OpenAI LLM client.
+        Configured LLM client (Azure OpenAI or Ollama).
 
     Raises:
-        ValueError: If Azure OpenAI credentials are not configured.
+        ValueError: If required credentials are not configured.
     """
-    from .azure_openai_client import AzureOpenAIClient
-
     if config is None:
         config = get_config()
 
-    if not config.azure_api_key or not config.azure_endpoint:
-        raise ValueError(
-            "Azure OpenAI credentials required. Set AZURE_OPENAI_API_KEY and "
-            "AZURE_OPENAI_ENDPOINT in .env"
+    from .openai_client import UnifiedOpenAIClient
+
+    if config.llm_provider == "azure":
+        if not config.azure_api_key or not config.azure_endpoint:
+            raise ValueError(
+                "Azure OpenAI credentials required. Set AZURE_OPENAI_API_KEY and "
+                "AZURE_OPENAI_ENDPOINT in .env, or set LLM_PROVIDER=ollama to use local LLM"
+            )
+
+        return UnifiedOpenAIClient(
+            provider="azure",
+            api_key=config.azure_api_key,
+            endpoint=config.azure_endpoint,
+            deployment_name=config.azure_deployment,
+            api_version=config.azure_api_version,
         )
 
-    return AzureOpenAIClient(
-        api_key=config.azure_api_key,
-        endpoint=config.azure_endpoint,
-        deployment_name=config.azure_deployment,
-        api_version=config.azure_api_version,
-    )
+    elif config.llm_provider == "ollama":
+        return UnifiedOpenAIClient(
+            provider="ollama",
+            base_url=config.ollama_base_url,
+            model=config.ollama_model,
+        )
+
+    else:
+        raise ValueError(f"Unknown LLM provider: {config.llm_provider}")

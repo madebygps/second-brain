@@ -71,11 +71,18 @@ Edit your `.env` file with the following **required** variables:
 DIARY_PATH=/Users/yourname/Documents/second-brain/diary
 PLANNER_PATH=/Users/yourname/Documents/second-brain/planner
 
-# Required: Azure OpenAI (get from Azure Portal)
+# Required: LLM Provider (choose one)
+LLM_PROVIDER=azure  # or "ollama" for local
+
+# Option 1: Azure OpenAI (cloud-based)
 AZURE_OPENAI_API_KEY=your-api-key-here
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=gpt-4o
 AZURE_OPENAI_API_VERSION=2024-02-15-preview
+
+# Option 2: Ollama (local, free)
+# OLLAMA_BASE_URL=http://localhost:11434
+# OLLAMA_MODEL=llama3.1
 ```
 
 **Optional variables** (with defaults):
@@ -89,9 +96,11 @@ BRAIN_LOG_LEVEL=INFO
 BRAIN_LOG_FILE=~/.brain/logs/brain.log
 ```
 
-### Step 4: Get Azure Credentials
+### Step 4: Setup LLM Provider
 
-#### Azure OpenAI (Required)
+Choose **one** of the following:
+
+#### Option 1: Azure OpenAI (Cloud)
 
 1. Go to [Azure Portal](https://portal.azure.com)
 2. Navigate to your Azure OpenAI resource
@@ -101,6 +110,25 @@ BRAIN_LOG_FILE=~/.brain/logs/brain.log
    - **Endpoint** → `AZURE_OPENAI_ENDPOINT`
 5. Go to **Model deployments**
 6. Copy your deployment name (e.g., "gpt-4o") → `AZURE_OPENAI_DEPLOYMENT`
+7. Set `LLM_PROVIDER=azure` in `.env`
+
+#### Option 2: Ollama (Local)
+
+1. Install Ollama from https://ollama.com
+2. Start Ollama (it runs in the background)
+3. Pull a model:
+   ```bash
+   ollama pull llama3.1        # Fast, balanced (4.7GB)
+   # OR
+   ollama pull llama3.2        # Smaller, faster (2GB)
+   # OR
+   ollama pull qwen2.5:7b      # Great for structured output
+   ```
+4. Set in `.env`:
+   ```bash
+   LLM_PROVIDER=ollama
+   OLLAMA_MODEL=llama3.1  # or whichever model you pulled
+   ```
 
 ### Step 5: Test Configuration
 
@@ -136,12 +164,19 @@ The directory doesn't exist. Create it:
 mkdir -p /path/to/dir
 ```
 
-### "Azure OpenAI credentials required"
+### "Azure OpenAI credentials required" or "LLM_PROVIDER must be set"
 
-Your Azure OpenAI credentials are missing or incorrect. Double-check:
-1. `AZURE_OPENAI_API_KEY` is set correctly
-2. `AZURE_OPENAI_ENDPOINT` ends with a `/`
-3. `AZURE_OPENAI_DEPLOYMENT` matches your deployment name in Azure Portal
+**If using Azure OpenAI:**
+1. Set `LLM_PROVIDER=azure` in `.env`
+2. Ensure `AZURE_OPENAI_API_KEY` is set correctly
+3. Ensure `AZURE_OPENAI_ENDPOINT` ends with a `/`
+4. Ensure `AZURE_OPENAI_DEPLOYMENT` matches your deployment name in Azure Portal
+
+**If using Ollama:**
+1. Set `LLM_PROVIDER=ollama` in `.env`
+2. Make sure Ollama is running (check with `ollama list`)
+3. Pull a model if you haven't: `ollama pull llama3.1`
+4. Set `OLLAMA_MODEL` to match the model you pulled
 
 ### .env File Not Loading
 

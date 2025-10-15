@@ -9,7 +9,7 @@ AI-powered journaling system with markdown entries, semantic backlinks, and LLM-
 - Package manager: `uv` (ALWAYS use `uv`, never `pip`)
 - Testing: pytest with 57 tests, 47% coverage
 - CLI: typer (add_completion=False) + rich
-- LLM: Azure OpenAI (required)
+- LLM: Azure OpenAI or Ollama (configurable via LLM_PROVIDER)
 
 ## Architecture
 
@@ -22,7 +22,7 @@ Core functionality with comprehensive type hints and dataclasses:
 - `constants.py` - Shared constants (100% coverage)
 - `entry_manager.py` - Entry I/O and parsing (93% coverage)
 - `llm_client.py` - Abstract LLM interface (73% coverage)
-- `azure_openai_client.py` - Azure OpenAI client (40% coverage)
+- `openai_client.py` - Unified OpenAI client for both Azure and Ollama (0% coverage)
 - `llm_analysis.py` - Atomic LLM operations: entities, backlinks, tags (17% coverage)
 - `report_generator.py` - Report orchestration (18% coverage)
 - `template_generator.py` - AI prompt generation (42% coverage)
@@ -63,12 +63,20 @@ uv run pytest tests/ --cov        # With coverage
 - `DIARY_PATH` - Path to Obsidian vault or markdown directory (for reflection entries)
 - `PLANNER_PATH` - Path to directory for daily plan files (separate from diary)
 
-**Azure OpenAI (required for all LLM features):**
+**LLM Provider (choose one):**
+- `LLM_PROVIDER` - Set to "azure" or "ollama" (default: azure)
+
+**Azure OpenAI (cloud-based):**
 - `AZURE_OPENAI_API_KEY` - API key
 - `AZURE_OPENAI_ENDPOINT` - Service endpoint
 - `AZURE_OPENAI_DEPLOYMENT` - Model deployment name (e.g., gpt-4o)
 - `AZURE_OPENAI_API_VERSION` - Default: 2024-02-15-preview
-- ✅ **Full functionality:** Diary prompts, task extraction, semantic analysis, backlinks, tags, reports
+- ✅ **Full functionality:** All features, cost tracking enabled
+
+**Ollama (local, free):**
+- `OLLAMA_BASE_URL` - API URL (default: http://localhost:11434)
+- `OLLAMA_MODEL` - Model name (default: llama3.1)
+- ✅ **Full functionality:** All features, no cost tracking (local is free!)
 
 ## Entry Structure
 
@@ -176,16 +184,21 @@ llm_client.py → azure_openai_client.py
 ## Recent Refactoring
 
 **Architecture Simplification:**
-- Removed Ollama client (195 lines) - Azure OpenAI only
 - Removed scheduler/daemon system (312 lines, 0% coverage)
 - Removed todos command (redundant with plan command)
 - Removed `generate_planning_prompts()` - plans no longer have prompts
 - Removed notes search functionality (238 lines) - focused on journaling/planning only
-- Total code reduction: ~838 lines
+- Total code reduction: ~643 lines
+
+**LLM Provider Support:**
+- Unified OpenAI client supports both Azure OpenAI and Ollama
+- Single implementation using OpenAI package's compatibility
+- Ollama uses OpenAI-compatible `/v1` endpoint
+- Configurable via `LLM_PROVIDER` environment variable
 
 **Module Improvements:**
 - Renamed `analysis.py` → `report_generator.py` (clearer purpose)
-- Renamed `azure_client.py` → `azure_openai_client.py` (clarity)
+- Renamed `azure_client.py` → `openai_client.py` (unified client)
 - Moved plan command from diary to separate `plan_commands.py` module
 - Updated `EntryManager` to accept separate diary_path and planner_path
 

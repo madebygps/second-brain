@@ -139,11 +139,24 @@ Create `~/.config/brain/.env` with these settings:
 - `DIARY_PATH` - Path to Obsidian vault or markdown directory for reflection entries
 - `PLANNER_PATH` - Path to directory for daily plan files (separate from diary)
 
-**Azure OpenAI** (required for all LLM features):
+**LLM Provider** (choose one):
+- `LLM_PROVIDER` - Set to `azure` or `ollama` (default: `azure`)
+
+**Option 1: Azure OpenAI** (cloud-based, requires API key):
 - `AZURE_OPENAI_API_KEY` - Your Azure OpenAI API key
 - `AZURE_OPENAI_ENDPOINT` - Your Azure OpenAI endpoint
-- `AZURE_OPENAI_DEPLOYMENT` - Deployment name (default: gpt-4o)
-- `AZURE_OPENAI_API_VERSION` - API version (default: 2024-02-15-preview)
+- `AZURE_OPENAI_DEPLOYMENT` - Deployment name (default: `gpt-4o`)
+- `AZURE_OPENAI_API_VERSION` - API version (default: `2024-02-15-preview`)
+
+**Option 2: Ollama** (local, free, private):
+- `OLLAMA_BASE_URL` - Ollama API URL (default: `http://localhost:11434`)
+- `OLLAMA_MODEL` - Model name (default: `llama3.1`)
+- First install Ollama from https://ollama.com
+- Then pull a model: `ollama pull llama3.1`
+
+> **Switching Providers:** Just change `LLM_PROVIDER` in your `.env` file and restart. No code changes needed!
+>
+> **Privacy:** Ollama runs completely locally. Your journal entries never leave your machine.
 
 **Logging & Cost Tracking** (optional configuration):
 - `BRAIN_COST_DB_PATH` - Path to cost tracking database (default: ~/.brain/costs.db)
@@ -207,7 +220,10 @@ After writing, run `brain diary link today` to add semantic backlinks:
 
 - Python 3.13+
 - uv package manager (ALWAYS use `uv`, never `pip`)
-- **Azure OpenAI** - Required for all LLM operations:
+- **LLM Provider** (choose one):
+  - **Azure OpenAI** - Cloud-based, requires API key and subscription
+  - **Ollama** - Local, free, completely private (requires installation from https://ollama.com)
+- All LLM features supported with either provider:
   - Diary prompt generation
   - Task extraction from diary entries
   - Semantic backlinks and tags
