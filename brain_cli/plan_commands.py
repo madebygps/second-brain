@@ -49,24 +49,36 @@ def extract_tasks_from_diary(diary_entry_content: str, diary_date: str, llm_clie
     if not diary_entry_content or len(diary_entry_content.strip()) < 50:
         return []
 
-    system_prompt = """You are a task extraction assistant. Analyze diary entries and extract actionable tasks for today.
+    system_prompt = """You are an intelligent task extraction assistant. Analyze diary entries and extract actionable tasks for the next day.
 
 Extract tasks that:
 - Are mentioned as incomplete, pending, or needing follow-up
 - Represent specific actions (not vague intentions)
-- Are relevant for the next day
+- Are relevant for the next day or future
 - Include follow-ups from meetings or conversations
+- Are scheduled events with specific times (e.g., "10:30 meeting", "3pm call")
+- Are mentioned in future context even if narrative (e.g., "Tomorrow I have to...", "I will need to...", "On Friday I should...")
+- Require preparation based on context (e.g., "meeting with VP" implies "prepare talking points")
+
+Be SMART about temporal context:
+- "Tomorrow I have to X" = future action, extract it
+- "I will have to X" = future action, extract it
+- "I need to X" = action item, extract it
+- "On [day/date] I'm doing X" = scheduled action, extract it
+- Look for time markers: tomorrow, next, Friday, specific times (10:30, 3pm, etc.)
 
 Do NOT extract:
-- Completed activities (past tense)
-- General reflections or feelings
-- Vague intentions without clear actions
+- Already completed activities (e.g., "I did X", "X was finished", "I went through X and it's done")
+- General reflections about feelings or mood
+- Past events with no follow-up needed
+- Vague intentions without actionable steps
 
 Format: Return ONLY a numbered list of tasks, one per line.
 Example:
-1. Follow up with Sarah about project proposal
-2. Review and merge pull request #42
-3. Prepare slides for Thursday presentation
+1. Pick up rental car at 10:30 AM
+2. Prepare talking points for Patrick meeting at 3:05 PM
+3. Moderate Pamela's stream
+4. Review deck changes before stream
 
 If no actionable tasks are found, return: NO_TASKS"""
 
