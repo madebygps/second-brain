@@ -45,7 +45,6 @@ class Config:
             env_locations = [
                 Path.cwd() / ".env",  # Current directory (highest priority)
                 Path.home() / ".config" / "brain" / ".env",  # XDG config dir
-                Path.home() / ".brain" / ".env",  # Legacy location
             ]
 
             env_found = False

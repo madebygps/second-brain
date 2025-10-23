@@ -1,0 +1,96 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Brain CLI: Diary Link",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "brain_cli.main",
+            "args": ["diary", "link"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Brain CLI: Diary Create",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "brain_cli.main",
+            "args": ["diary", "create"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Brain CLI: Plan Create",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "brain_cli.main",
+            "args": ["plan", "create"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Brain CLI: Diary Report (7 days)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "brain_cli.main",
+            "args": ["diary", "report", "7"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Brain CLI: Custom Command",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "brain_cli.main",
+            "args": ["${input:command}", "${input:subcommand}", "${input:args}"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "command",
+            "type": "pickString",
+            "description": "Select command",
+            "options": ["diary", "plan", "cost"],
+            "default": "diary"
+        },
+        {
+            "id": "subcommand",
+            "type": "promptString",
+            "description": "Enter subcommand (e.g., create, link, report)",
+            "default": "link"
+        },
+        {
+            "id": "args",
+            "type": "promptString",
+            "description": "Enter additional arguments (optional)",
+            "default": ""
+        }
+    ]
+}
