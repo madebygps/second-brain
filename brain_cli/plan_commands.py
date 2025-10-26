@@ -10,7 +10,10 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from brain_core.config import get_config, get_llm_client
-from brain_core.constants import TASK_EXTRACTION_MAX_TOKENS, TASK_EXTRACTION_TEMPERATURE
+from brain_core.constants import (
+    TASK_EXTRACTION_MAX_TOKENS,
+    TASK_EXTRACTION_TEMPERATURE,
+)
 from brain_core.entry_manager import EntryManager
 
 app = typer.Typer(help="Daily planning with task management")
